@@ -1,8 +1,7 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { Cell, User, Point } from '../types';
-import { getCellBounds } from '../utils';
 
 interface GameMapProps {
   userLocation: Point | null;
@@ -12,21 +11,18 @@ interface GameMapProps {
   activeUser: User | null;
   currentPath: Point[]; 
   activeTrail?: Point[]; 
-  showLoopPreview?: boolean;
-  originalStartPoint?: Point;
   onMapClick?: (lat: number, lng: number) => void;
 }
 
 const GameMap: React.FC<GameMapProps> = ({ 
-  userLocation, cells, users, activeUserId, activeUser, currentPath, activeTrail = [],
-  showLoopPreview, originalStartPoint, onMapClick
+  userLocation, cells, users, activeUserId, activeUser, activeTrail = [], onMapClick
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
-  const mapId = 'domina-tactical-map';
+  const mapId = 'dmn-tactical-map';
 
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -49,7 +45,7 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Renderer para o efeito "Liquid Territory"
+      // Renderer para o efeito "Liquid Territory" - O segredo da suavidade está aqui
       canvasLayerRef.current = L.canvas({ 
         padding: 0.5,
         className: 'territory-liquid-engine' 
@@ -73,7 +69,7 @@ const GameMap: React.FC<GameMapProps> = ({
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
-    // Renderizamos cada célula como um círculo de influência
+    // Renderizamos cada célula como um círculo de influência para o efeito Metaball
     (Object.values(cells) as Cell[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
@@ -82,7 +78,7 @@ const GameMap: React.FC<GameMapProps> = ({
       const centerLat = parseFloat(latStr);
       const centerLng = parseFloat(lngStr);
 
-      // O raio tático de 10 metros garante que os círculos se fundam em uma massa líquida
+      // Usamos círculos com raio ligeiramente maior que a grid para fusão perfeita
       L.circle([centerLat, centerLng], {
         radius: 10,
         renderer: canvasLayerRef.current,
@@ -134,15 +130,15 @@ const GameMap: React.FC<GameMapProps> = ({
         .leaflet-container { background: #080808 !important; }
         
         /* MOTOR DE FLUIDEZ TÁTICA (METABALLS) */
-        /* O blur alto seguido de um contraste agressivo funde os círculos em uma área orgânica */
+        /* O segredo da suavidade: Blur alto seguido de Contraste extremo funde os círculos em uma área única */
         .territory-liquid-engine {
-          filter: blur(14px) contrast(400%) brightness(1.2);
-          opacity: 0.65;
-          mix-blend-mode: plus-lighter;
+          filter: blur(14px) contrast(450%) brightness(1.1);
+          opacity: 0.7;
+          mix-blend-mode: screen;
           pointer-events: none !important;
         }
 
-        .player-marker { transition: transform 0.2s cubic-bezier(0.1, 0.7, 1.0, 0.1); }
+        .player-marker { transition: transform 0.2s linear; }
         .map-tiles { opacity: 0.4; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" />

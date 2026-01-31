@@ -14,7 +14,7 @@ export const generateBattleReport = async (activity: Activity, nickname: string)
   };
 
   const prompt = `
-    Gere um "Relatório de Batalha" curto, tático e de alta energia para um jogo de conquista de território chamado "Domina".
+    Gere um "Relatório de Batalha" curto, tático e de alta energia para um sistema de conquista de território chamado "DmN".
     O jogo foca em "Cercamento" (fechar loops para reivindicar área) e "Sabotagem" (caminhar por área inimiga para neutralizá-la).
     O texto DEVE ser obrigatoriamente em Português do Brasil (PT-BR).
     
@@ -24,7 +24,7 @@ export const generateBattleReport = async (activity: Activity, nickname: string)
     - Território Inimigo Neutralizado: ${stats.areaNeutralized.toLocaleString()} m²
     - Distância Percorrida: ${stats.distance} km
     
-    O tom deve ser o de um comandante militar instruindo um soldado. Mencione como o jogador "sabotou as linhas inimigas" ou "garantiu um perímetro estratégico". Máximo de 250 caracteres.
+    O tom deve ser o de um comandante de rede instruindo um agente de elite. Mencione como o jogador "sabotou as linhas inimigas" ou "expandiu a rede DmN". Máximo de 250 caracteres.
   `;
 
   try {
@@ -32,9 +32,9 @@ export const generateBattleReport = async (activity: Activity, nickname: string)
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text || "Perímetro estratégico estabelecido. Território atualizado, Comandante.";
+    return response.text || "Rede DmN atualizada. Perímetro estratégico estabelecido, Agente.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Missão cumprida. Solo inimigo neutralizado. Grid atualizado.";
+    return "Missão cumprida. Solo inimigo neutralizado. Grid DmN atualizado.";
   }
 };

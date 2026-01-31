@@ -1,19 +1,12 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { TACTICAL_COLORS, CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from './constants';
+import { TACTICAL_COLORS } from './constants';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
-import { playVictorySound } from './utils/audio';
-import { generateBattleReport } from './services/gemini';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import Leaderboard from './components/Leaderboard';
-import AvatarCustomizer from './components/AvatarCustomizer';
-import { Trophy, Zap, Radio, AlertCircle, Cpu, UserPlus, LogIn } from 'lucide-react';
-
-const CLOSE_LOOP_THRESHOLD_METERS = 35; 
-const LEVEL_XP_STEP = 1000;
+import { Radio } from 'lucide-react';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -27,16 +20,12 @@ const getDeterministicColor = (nickname: string) => {
 const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
-  const [isFinishing, setIsFinishing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   
-  const [isSimulating, setIsSimulating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [globalUsers, setGlobalUsers] = useState<Record<string, any>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
-  const [summary, setSummary] = useState<any>(null);
 
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -62,7 +51,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const lastSession = localStorage.getItem('domina_current_session');
+    const lastSession = localStorage.getItem('dmn_session');
     if (lastSession) {
       setUser(JSON.parse(lastSession));
       setView(AppState.HOME);
@@ -77,17 +66,16 @@ const App: React.FC = () => {
   }, [user?.id, view]);
 
   useEffect(() => {
-    if (isSimulating) return;
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() }),
       null,
       { enableHighAccuracy: true }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [isSimulating]);
+  }, []);
 
   useEffect(() => {
-    if (view === AppState.ACTIVE && userLocation && currentActivity && !isFinishing && user) {
+    if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
       const points = currentActivity.points;
       const lastPoint = points[points.length - 1];
       if (lastPoint) {
@@ -133,7 +121,7 @@ const App: React.FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setUser(data);
-      localStorage.setItem('domina_current_session', JSON.stringify(data));
+      localStorage.setItem('dmn_session', JSON.stringify(data));
       setView(AppState.HOME);
     } catch (err: any) { setLoginError(err.message); }
   };
@@ -175,17 +163,18 @@ const App: React.FC = () => {
       </div>
 
       {view === AppState.LOGIN && (
-        <div className="absolute inset-0 bg-[#0b0d11] z-[500] flex flex-col items-center justify-center p-8">
+        <div className="absolute inset-0 bg-[#080808] z-[500] flex flex-col items-center justify-center p-8">
            <div className="text-center mb-12">
-              <div className="w-20 h-20 bg-blue-600 rounded-[28px] mx-auto mb-6 flex items-center justify-center shadow-2xl">
+              <div className="w-20 h-20 bg-blue-600 rounded-[28px] mx-auto mb-6 flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.3)]">
                 <Radio size={40} />
               </div>
-              <h1 className="text-5xl font-black italic tracking-tighter uppercase">DOMINA</h1>
+              <h1 className="text-5xl font-black italic tracking-tighter uppercase">DmN</h1>
            </div>
            <div className="w-full max-w-xs space-y-4">
-              <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-              <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              <div className="flex gap-2">
+              <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center focus:border-blue-500 outline-none transition-all" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+              <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center focus:border-blue-500 outline-none transition-all" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              {loginError && <p className="text-red-500 text-[10px] font-bold uppercase text-center">{loginError}</p>}
+              <div className="flex gap-2 pt-4">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase italic">Login</button>
                 <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 py-4 rounded-2xl font-black uppercase italic">Criar</button>
               </div>
@@ -206,9 +195,9 @@ const App: React.FC = () => {
 
       {view === AppState.TUTORIAL && (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
-          <div className="w-full max-w-sm bg-[#151515] rounded-[48px] p-12 border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
+          <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-12 border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
             <div className="flex items-start gap-5 mb-10">
-               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-xl shadow-lg shadow-red-500/20">DmN</div>
+               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-2xl shadow-lg shadow-red-500/20">DmN</div>
                <p className="text-[15px] font-bold text-white leading-snug pt-1">
                  Corra para conquistar o território, mas garanta que o ponto de início e fim estejam a menos de 200m para valer!
                </p>
@@ -227,7 +216,7 @@ const App: React.FC = () => {
         <ActivityOverlay 
           activity={currentActivity} 
           user={user} 
-          onStop={() => { setView(AppState.SUMMARY); setSummary({ report: "Missão Finalizada" }); }} 
+          onStop={() => setView(AppState.HOME)} 
         />
       )}
     </div>
