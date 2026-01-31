@@ -53,12 +53,22 @@ const GameMap: React.FC<GameMapProps> = ({
       
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
+      // ROTA COMPLETA (Histórico da Missão) - Agora sólida e visível
       fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 2, opacity: 0.1, dashArray: '4, 8'
+        color: activeUser?.color || '#FFFFFF', 
+        weight: 3, 
+        opacity: 0.4, 
+        dashArray: null, // Linha sólida para persistência
+        lineCap: 'round'
       }).addTo(mapRef.current);
 
+      // TRILHA QUENTE (Ativa para Captura) - Destaque Neon
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round'
+        color: activeUser?.color || '#FFFFFF', 
+        weight: 8, 
+        opacity: 0.8, 
+        lineCap: 'round', 
+        lineJoin: 'round'
       }).addTo(mapRef.current);
 
       simLineRef.current = L.polyline([], {
@@ -100,7 +110,6 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // 1. Jogador Local (Prioridade máxima de renderização)
     if (userLocation && activeUser) {
       const id = activeUserId;
       const color = activeUser.color || '#3B82F6';
@@ -124,7 +133,6 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     }
 
-    // 2. Outros Jogadores
     Object.values(users).forEach((u: User) => {
       if (!u.lat || !u.lng || u.id === activeUserId) return;
       if (!playerMarkersRef.current[u.id]) {
@@ -172,7 +180,7 @@ const GameMap: React.FC<GameMapProps> = ({
         weight: 1.5,
         opacity: 0.8,
         fillColor: color, 
-        fillOpacity: 0.25 
+        fillOpacity: 0.3 
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, activeUserId]);

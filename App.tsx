@@ -80,7 +80,7 @@ const App: React.FC = () => {
         const currentPos = userLocationRef.current;
         const dist = calculateDistance(currentPos, simTarget);
 
-        if (dist < 0.4) {
+        if (dist < 0.3) {
           setSimTarget(null);
           lastUpdateRef.current = null;
           return;
@@ -133,7 +133,7 @@ const App: React.FC = () => {
       const lastPoint = points[points.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, loc) : 0;
       
-      const threshold = isTestMode ? 0.3 : 2.5; 
+      const threshold = isTestMode ? 0.25 : 2.5; 
       
       if (d > threshold) {
         const newPoints = [...points, loc];
@@ -158,8 +158,11 @@ const App: React.FC = () => {
                 playVictorySound();
                 setTimeout(() => setShowConfetti(false), 2000);
                 
+                // Reinicia apenas a trilha "quente" (points), mas mantém o histórico (fullPath)
                 setCurrentActivity(prev => prev ? { 
-                  ...prev, points: [loc], fullPath: newFullPath,
+                  ...prev, 
+                  points: [loc], 
+                  fullPath: newFullPath,
                   capturedCellIds: new Set([...prev.capturedCellIds, ...enclosedIds]) 
                 } : null);
                 return;
