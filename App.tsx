@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
 import GameMap from './components/GameMap';
@@ -7,6 +7,7 @@ import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
 import { Radio, Zap, ShieldCheck } from 'lucide-react';
 import { generateBattleReport } from './services/gemini';
+import { playVictorySound } from './utils/audio';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
@@ -22,6 +23,10 @@ const App: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Ref para evitar loops infinitos no useEffect de movimentação
+  const activityRef = useRef<Activity | null>(null);
+  useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
+
   const syncGlobalState = useCallback(async (newCells: Cell[] = []) => {
     if (!user) return;
     try {
@@ -36,7 +41,7 @@ const App: React.FC = () => {
     } catch (e) { console.error("Sync failed"); }
   }, [user, userLocation]);
 
-  // GPS / Modo de Teste
+  // Gerenciamento de Localização (GPS vs Teste)
   useEffect(() => {
     if (isTestMode) {
       if (!userLocation) setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
@@ -50,19 +55,21 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
-  // Lógica de Movimentação e Captura (Core do Modo de Teste)
+  // Processamento de Movimento e Captura de Território
   useEffect(() => {
-    if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
-      const points = currentActivity.points;
+    const activity = activityRef.current;
+    if (view === AppState.ACTIVE && userLocation && activity && user) {
+      const points = activity.points;
       const lastPoint = points[points.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, userLocation) : 0;
       
-      const threshold = isTestMode ? 0.1 : 1.5;
+      const threshold = isTestMode ? 0.1 : 1.5; // Modo teste é muito mais sensível
       
       if (d > threshold) {
         const newPoints = [...points, userLocation];
-        const newFullPath = [...(currentActivity.fullPath || []), userLocation];
+        const newFullPath = [...(activity.fullPath || []), userLocation];
 
+        // Verificar intersecção para fechar polígono (mínimo 4 pontos para formar área)
         if (newPoints.length > 3) {
           const pA = newPoints[newPoints.length - 2];
           const pB = newPoints[newPoints.length - 1];
@@ -80,38 +87,43 @@ const App: React.FC = () => {
                 
                 setCells(prev => ({ ...prev, ...captured.reduce((a, c) => ({...a, [c.id]: c}), {}) }));
                 syncGlobalState(captured);
-                setShowConfetti(true); 
+                setShowConfetti(true);
+                playVictorySound();
                 setTimeout(() => setShowConfetti(false), 2000);
 
-                setCurrentActivity({ 
-                  ...currentActivity, 
+                // Reinicia o rastro após captura bem-sucedida
+                setCurrentActivity(prev => prev ? { 
+                  ...prev, 
                   points: [userLocation], 
                   fullPath: newFullPath,
-                  capturedCellIds: new Set([...currentActivity.capturedCellIds, ...enclosedIds]) 
-                });
+                  capturedCellIds: new Set([...prev.capturedCellIds, ...enclosedIds]) 
+                } : null);
                 return;
               }
             }
           }
         }
-        setCurrentActivity({ 
-          ...currentActivity, 
+
+        // Apenas atualiza a trilha se não houve captura
+        setCurrentActivity(prev => prev ? { 
+          ...prev, 
           points: newPoints, 
           fullPath: newFullPath,
-          distanceMeters: currentActivity.distanceMeters + d 
-        });
+          distanceMeters: prev.distanceMeters + d 
+        } : null);
       }
     }
-  }, [userLocation, view, isTestMode, user, syncGlobalState]); // Removido currentActivity da dependência direta para evitar loops, usando o estado interno
+  }, [userLocation, view, isTestMode, user, syncGlobalState]);
 
   const stopActivity = async () => {
-    if (!currentActivity || !user) return;
+    const activity = activityRef.current;
+    if (!activity || !user) return;
     setView(AppState.SUMMARY);
-    setBattleReport("Compilando dados táticos...");
+    setBattleReport("Sincronizando dados com a Rede...");
     try {
-      const report = await generateBattleReport(currentActivity, user.nickname);
+      const report = await generateBattleReport(activity, user.nickname);
       setBattleReport(report);
-    } catch { setBattleReport("Operação finalizada."); }
+    } catch { setBattleReport("Operação concluída com sucesso."); }
   };
 
   const handleAuth = async (action: 'login' | 'register') => {
@@ -128,10 +140,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans">
+    <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans select-none">
       {showConfetti && <ConfettiEffect />}
       
-      {/* MAPA - CAMADA FUNDO */}
+      {/* CAMADA 0: MAPA */}
       <div className="absolute inset-0 z-0">
         <GameMap 
           userLocation={userLocation} 
@@ -145,10 +157,11 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* ELEMENTOS DE UI - CAMADA TOPO */}
+      {/* CAMADA 2000+: UI */}
       <button 
         onClick={() => setIsTestMode(!isTestMode)} 
-        className={`absolute top-14 right-6 z-[2000] p-4 rounded-2xl border transition-all shadow-2xl active:scale-90 ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}
+        className={`absolute top-14 right-6 z-[2500] p-4 rounded-2xl border transition-all shadow-2xl active:scale-90 ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}
+        title="Modo de Teste (Clique no Mapa)"
       >
         <Zap size={20} className={isTestMode ? 'fill-white' : ''} />
       </button>
@@ -171,8 +184,8 @@ const App: React.FC = () => {
 
       {view === AppState.HOME && (
         <div className="absolute bottom-0 inset-x-0 p-10 z-[1500]">
-          <div className="mb-6">
-            <p className="text-blue-500 font-black text-[10px] tracking-[0.3em] uppercase mb-1">Status de Rede</p>
+          <div className="mb-6 animate-in slide-in-from-bottom duration-500">
+            <p className="text-blue-500 font-black text-[10px] tracking-[0.3em] uppercase mb-1">Status de Rede Online</p>
             <h2 className="text-4xl font-black italic uppercase tracking-tighter">{user?.nickname}</h2>
           </div>
           <button 

@@ -23,9 +23,9 @@ const GameMap: React.FC<GameMapProps> = ({
   const territoryCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
+  
+  // CRITICAL: Ref para o callback de clique para evitar stale closure no evento do Leaflet
   const onMapClickRef = useRef(onMapClick);
-
-  // Manter ref do callback atualizada para evitar stale closures no evento do Leaflet
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
@@ -44,19 +44,23 @@ const GameMap: React.FC<GameMapProps> = ({
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
       fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 3, opacity: 0.2, dashArray: '5, 10'
+        color: activeUser?.color || '#FFFFFF', weight: 3, opacity: 0.1, dashArray: '5, 10'
       }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round'
       }).addTo(mapRef.current);
 
+      // Listener de clique para o Modo de Teste
       mapRef.current.on('click', (e) => {
-        onMapClickRef.current?.(e.latlng.lat, e.latlng.lng);
+        if (onMapClickRef.current) {
+          onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+        }
       });
     }
   }, []);
 
+  // Atualização das Células (Território)
   useEffect(() => {
     if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
@@ -70,6 +74,7 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells]);
 
+  // Atualização dos Marcadores de Jogadores
   useEffect(() => {
     if (!mapRef.current) return;
     const updateMarker = (uId: string, lat: number, lng: number, color: string) => {
@@ -89,6 +94,7 @@ const GameMap: React.FC<GameMapProps> = ({
     if (userLocation && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser.color);
   }, [users, userLocation, activeUser]);
 
+  // Atualização das Trilhas
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
       activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
@@ -108,9 +114,9 @@ const GameMap: React.FC<GameMapProps> = ({
           filter: blur(4px);
           pointer-events: none;
         }
-        .map-tiles { opacity: 0.3; filter: invert(100%) brightness(0.6) saturate(0.1); }
-        .leaflet-container { background: #050505 !important; }
-        .player-marker { transition: all 0.3s ease-out; z-index: 1000 !important; }
+        .map-tiles { opacity: 0.25; filter: invert(100%) brightness(0.6) saturate(0.1); }
+        .leaflet-container { background: #020202 !important; }
+        .player-marker { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1000 !important; }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full outline-none" />
     </>
