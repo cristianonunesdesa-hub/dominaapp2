@@ -23,11 +23,16 @@ const GameMap: React.FC<GameMapProps> = ({
   const territoryCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
-  const mapId = 'dmn-tactical-map';
+  const onMapClickRef = useRef(onMapClick);
+
+  // Manter ref do callback atualizada para evitar stale closures no evento do Leaflet
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   useEffect(() => {
     if (!mapRef.current) {
-      mapRef.current = L.map(mapId, {
+      mapRef.current = L.map('dmn-tactical-map', {
         zoomControl: false, attributionControl: false, preferCanvas: true
       }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 17);
 
@@ -38,17 +43,17 @@ const GameMap: React.FC<GameMapProps> = ({
       territoryCanvasRef.current = L.canvas({ padding: 0.5, className: 'territory-layer' }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
-      // Trilha Total (Histórico da corrida atual)
       fullPathLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', weight: 3, opacity: 0.2, dashArray: '5, 10'
       }).addTo(mapRef.current);
 
-      // Trilha Ativa (O laço que está sendo fechado)
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round'
       }).addTo(mapRef.current);
 
-      mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
+      mapRef.current.on('click', (e) => {
+        onMapClickRef.current?.(e.latlng.lat, e.latlng.lng);
+      });
     }
   }, []);
 
@@ -99,15 +104,15 @@ const GameMap: React.FC<GameMapProps> = ({
     <>
       <style>{`
         .territory-layer { 
-          opacity: 0.6 !important; /* 60% REAIS */
-          filter: blur(5px);
+          opacity: 0.6 !important; 
+          filter: blur(4px);
           pointer-events: none;
         }
         .map-tiles { opacity: 0.3; filter: invert(100%) brightness(0.6) saturate(0.1); }
         .leaflet-container { background: #050505 !important; }
         .player-marker { transition: all 0.3s ease-out; z-index: 1000 !important; }
       `}</style>
-      <div id={mapId} className="h-full w-full outline-none" />
+      <div id="dmn-tactical-map" className="h-full w-full outline-none" />
     </>
   );
 };

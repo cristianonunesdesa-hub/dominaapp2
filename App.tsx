@@ -1,12 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { TACTICAL_COLORS } from './constants';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio, Zap, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Radio, Zap, ShieldCheck } from 'lucide-react';
 import { generateBattleReport } from './services/gemini';
 
 const App: React.FC = () => {
@@ -51,14 +50,13 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
-  // Lógica de Movimentação e Captura
+  // Lógica de Movimentação e Captura (Core do Modo de Teste)
   useEffect(() => {
     if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
       const points = currentActivity.points;
       const lastPoint = points[points.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, userLocation) : 0;
       
-      // No modo de teste (clique), qualquer distância > 0.1m registra movimento
       const threshold = isTestMode ? 0.1 : 1.5;
       
       if (d > threshold) {
@@ -85,7 +83,6 @@ const App: React.FC = () => {
                 setShowConfetti(true); 
                 setTimeout(() => setShowConfetti(false), 2000);
 
-                // Reset do rastro para novo polígono
                 setCurrentActivity({ 
                   ...currentActivity, 
                   points: [userLocation], 
@@ -105,7 +102,7 @@ const App: React.FC = () => {
         });
       }
     }
-  }, [userLocation, view, isTestMode, currentActivity, user, syncGlobalState]);
+  }, [userLocation, view, isTestMode, user, syncGlobalState]); // Removido currentActivity da dependência direta para evitar loops, usando o estado interno
 
   const stopActivity = async () => {
     if (!currentActivity || !user) return;
@@ -134,7 +131,7 @@ const App: React.FC = () => {
     <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans">
       {showConfetti && <ConfettiEffect />}
       
-      {/* MAPA NA CAMADA 0 */}
+      {/* MAPA - CAMADA FUNDO */}
       <div className="absolute inset-0 z-0">
         <GameMap 
           userLocation={userLocation} 
@@ -148,17 +145,16 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* BOTÃO TESTE (Z-1100) */}
+      {/* ELEMENTOS DE UI - CAMADA TOPO */}
       <button 
         onClick={() => setIsTestMode(!isTestMode)} 
-        className={`absolute top-14 right-6 z-[1100] p-4 rounded-2xl border transition-all shadow-2xl active:scale-90 ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}
+        className={`absolute top-14 right-6 z-[2000] p-4 rounded-2xl border transition-all shadow-2xl active:scale-90 ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}
       >
         <Zap size={20} className={isTestMode ? 'fill-white' : ''} />
       </button>
 
-      {/* LOGIN (Z-2000) */}
       {view === AppState.LOGIN && (
-        <div className="absolute inset-0 bg-black z-[2000] flex flex-col items-center justify-center p-8">
+        <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8">
            <Radio size={48} className="text-blue-600 mb-6 animate-pulse" />
            <h1 className="text-5xl font-black italic mb-10 tracking-tighter uppercase">DmN</h1>
            <div className="w-full max-w-xs space-y-4">
@@ -173,9 +169,8 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* HOME (Z-1000) */}
       {view === AppState.HOME && (
-        <div className="absolute bottom-0 inset-x-0 p-10 z-[1000]">
+        <div className="absolute bottom-0 inset-x-0 p-10 z-[1500]">
           <div className="mb-6">
             <p className="text-blue-500 font-black text-[10px] tracking-[0.3em] uppercase mb-1">Status de Rede</p>
             <h2 className="text-4xl font-black italic uppercase tracking-tighter">{user?.nickname}</h2>
@@ -192,16 +187,14 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ATIVIDADE (Z-1500) */}
       {view === AppState.ACTIVE && currentActivity && (
         <div className="absolute inset-0 z-[1500] pointer-events-none">
           <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />
         </div>
       )}
       
-      {/* SUMÁRIO (Z-2000) */}
       {view === AppState.SUMMARY && (
-        <div className="absolute inset-0 bg-black z-[2000] p-10 flex flex-col">
+        <div className="absolute inset-0 bg-black z-[3000] p-10 flex flex-col">
           <h2 className="text-5xl font-black italic mb-10 pt-16 tracking-tighter leading-none">SUMÁRIO DE<br/>OPERATIVO</h2>
           <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 flex-1 mb-10 overflow-y-auto shadow-inner relative">
             <div className="absolute top-0 right-0 p-8 opacity-5"><ShieldCheck size={120} /></div>
