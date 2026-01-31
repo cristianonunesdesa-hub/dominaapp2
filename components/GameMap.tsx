@@ -39,7 +39,7 @@ const GameMap: React.FC<GameMapProps> = ({
         attributionControl: false, 
         preferCanvas: true,
         inertia: true
-      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 16);
+      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 17);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 20, 
@@ -54,15 +54,15 @@ const GameMap: React.FC<GameMapProps> = ({
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
       fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 3, opacity: 0.1, dashArray: '5, 10'
+        color: activeUser?.color || '#FFFFFF', weight: 2, opacity: 0.1, dashArray: '4, 8'
       }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.7, lineCap: 'round', lineJoin: 'round'
+        color: activeUser?.color || '#FFFFFF', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round'
       }).addTo(mapRef.current);
 
       simLineRef.current = L.polyline([], {
-        color: '#f97316', weight: 2, opacity: 0.5, dashArray: '4, 8'
+        color: '#f97316', weight: 1.5, opacity: 0.4, dashArray: '5, 10'
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => {
@@ -73,7 +73,7 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
-  // Sincronização de Alvo e Linha de Simulação
+  // Alvo de Simulação
   useEffect(() => {
     if (!mapRef.current) return;
     if (targetMarkerRef.current) targetMarkerRef.current.remove();
@@ -83,8 +83,8 @@ const GameMap: React.FC<GameMapProps> = ({
         icon: L.divIcon({
           className: 'target-marker',
           html: `<div class="relative w-10 h-10 flex items-center justify-center">
-                  <div class="absolute inset-0 border-2 border-orange-500 rounded-full animate-ping opacity-30"></div>
-                  <div class="w-2.5 h-2.5 bg-orange-500 rounded-full shadow-[0_0_10px_#f97316]"></div>
+                  <div class="absolute inset-0 border-2 border-orange-500 rounded-full animate-ping opacity-20"></div>
+                  <div class="w-2.5 h-2.5 bg-orange-500 rounded-full shadow-[0_0_12px_#f97316] border border-white/20"></div>
                 </div>`,
           iconSize: [40, 40], iconAnchor: [20, 20]
         })
@@ -98,7 +98,7 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, [simTarget, userLocation]);
 
-  // Marcadores de Jogadores
+  // Marcadores de Jogadores (Sem glow excessivo)
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -109,8 +109,8 @@ const GameMap: React.FC<GameMapProps> = ({
           icon: L.divIcon({
             className: 'player-marker',
             html: `<div class="relative w-8 h-8 flex items-center justify-center">
-                    <div class="absolute inset-0 bg-white/10 blur-md rounded-full"></div>
-                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-lg">
+                    <div class="absolute inset-0 bg-white/5 blur-sm rounded-full"></div>
+                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-xl">
                       <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${u.color}"></div>
                     </div>
                   </div>`,
@@ -130,11 +130,11 @@ const GameMap: React.FC<GameMapProps> = ({
     });
 
     if (userLocation) {
-      mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true });
+      mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
     }
   }, [users, userLocation, activeUserId]);
 
-  // Renderização de Territórios (Sem "Manchas")
+  // Renderização de Setores (Células) - DEFINIÇÃO TÁTICA
   useEffect(() => {
     if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
@@ -143,16 +143,16 @@ const GameMap: React.FC<GameMapProps> = ({
       const color = isHostile ? '#EF4444' : (cell.ownerColor || '#3B82F6');
       const [lat, lng] = cell.id.split('_').map(parseFloat);
       
-      // Círculo com bordas táticas em vez de desfoque global
+      // Estilo Célula: Borda nítida com preenchimento sólido sutil
       L.circle([lat, lng], {
-        radius: 24,
+        radius: 26,
         renderer: territoryCanvasRef.current!, 
         stroke: true,
         color: color,
-        weight: 1,
-        opacity: 0.3,
+        weight: 1.5,
+        opacity: 0.8,
         fillColor: color, 
-        fillOpacity: 0.4 
+        fillOpacity: 0.25 
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, activeUserId]);
@@ -171,15 +171,24 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        /* Melhoria Tática: Efeito de Pulsação de Setor */
+        /* MAPA TÁTICO: REMOÇÃO DE "MANCHAS" */
         .leaflet-pane.leaflet-overlay-pane {
           mix-blend-mode: screen;
-          opacity: 0.9;
-          filter: contrast(1.2);
+          opacity: 0.95;
+          filter: none !important; /* Remove qualquer blur global */
         }
-        .map-tiles { opacity: 0.3; filter: grayscale(1) invert(1) brightness(0.5); }
-        .player-marker { transition: all 0.1s linear; z-index: 1000 !important; }
-        .target-marker { z-index: 2000 !important; pointer-events: none; }
+        .map-tiles { 
+          opacity: 0.35; 
+          filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1);
+        }
+        .player-marker { 
+          transition: all 0.1s linear; 
+          z-index: 1000 !important; 
+        }
+        .target-marker { 
+          z-index: 2000 !important; 
+          pointer-events: none; 
+        }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full outline-none" />
     </>

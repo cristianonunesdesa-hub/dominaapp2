@@ -8,7 +8,7 @@ import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
 import Leaderboard from './components/Leaderboard';
 import MissionSummary from './components/MissionSummary';
-import { Radio, Zap, Globe, Activity as ActivityIcon, Bell, Navigation, Crosshair } from 'lucide-react';
+import { Radio, Zap, Globe, Activity as ActivityIcon, Navigation, Crosshair, Terminal } from 'lucide-react';
 import { playVictorySound } from './utils/audio';
 
 const App: React.FC = () => {
@@ -29,7 +29,7 @@ const App: React.FC = () => {
   const activityRef = useRef<Activity | null>(null);
   const userLocationRef = useRef<Point | null>(null);
   const requestRef = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
+  const lastUpdateRef = useRef<number | null>(null);
 
   useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
@@ -74,27 +74,28 @@ const App: React.FC = () => {
     } catch (e) { console.error("Sync failed", e); }
   }, [user]);
 
-  // Motor de Simulação de Alta Performance (60 FPS)
+  // Motor de Simulação Pro (60 FPS)
   const animateSimulation = useCallback((time: number) => {
-    if (lastUpdateRef.current !== undefined && simTarget && userLocationRef.current) {
-      const deltaTime = (time - lastUpdateRef.current) / 1000; // segundos
-      if (deltaTime > 0 && deltaTime < 0.1) { // Proteção contra saltos de frame
+    if (lastUpdateRef.current !== null && simTarget && userLocationRef.current) {
+      const deltaTime = (time - lastUpdateRef.current) / 1000;
+      if (deltaTime > 0 && deltaTime < 0.1) {
         const currentPos = userLocationRef.current;
         const dist = calculateDistance(currentPos, simTarget);
 
-        if (dist < 0.5) {
+        if (dist < 0.4) {
           setSimTarget(null);
+          lastUpdateRef.current = null;
+          return;
         } else {
           const speedMps = (simSpeed * 1000) / 3600;
           const moveDist = speedMps * deltaTime;
           const ratio = Math.min(moveDist / dist, 1);
           
-          const nextPos = {
+          setUserLocation({
             lat: currentPos.lat + (simTarget.lat - currentPos.lat) * ratio,
             lng: currentPos.lng + (simTarget.lng - currentPos.lng) * ratio,
             timestamp: Date.now()
-          };
-          setUserLocation(nextPos);
+          });
         }
       }
     }
@@ -104,9 +105,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (isTestMode && simTarget) {
+      lastUpdateRef.current = performance.now();
       requestRef.current = requestAnimationFrame(animateSimulation);
     } else {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      lastUpdateRef.current = null;
     }
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [isTestMode, simTarget, animateSimulation]);
@@ -125,7 +128,7 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
-  // Game Loop: Processamento de Captura
+  // Capture Loop
   useEffect(() => {
     const activity = activityRef.current;
     const loc = userLocation;
@@ -134,8 +137,7 @@ const App: React.FC = () => {
       const lastPoint = points[points.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, loc) : 0;
       
-      // No modo simulação o registro é mais frequente para curvas suaves
-      const threshold = isTestMode ? 0.4 : 2.5; 
+      const threshold = isTestMode ? 0.3 : 2.5; 
       
       if (d > threshold) {
         const newPoints = [...points, loc];
@@ -200,9 +202,9 @@ const App: React.FC = () => {
         body: JSON.stringify({ nickname: loginNickname, password: loginPassword, action })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro de Conexão");
+      if (!res.ok) throw new Error(data.error || "Connection Failed");
       const userWithDefaults = {
-        ...data, xp: data.xp || 0, level: data.level || 1, totalAreaM2: data.total_area_m2 || 0,
+        ...data, xp: data.xp || 0, level: data.level || 1, total_area_m2: data.total_area_m2 || 0,
         cells_owned: data.cells_owned || 0, color: data.color || '#3B82F6'
       };
       setUser(userWithDefaults);
@@ -213,6 +215,11 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans select-none">
+      {/* OVERLAY TÁTICO: VINHETA E RUÍDO */}
+      <div className="fixed inset-0 z-[5000] pointer-events-none vignette-overlay"></div>
+      <div className="fixed inset-0 z-[5001] pointer-events-none grain-overlay"></div>
+      <div className="fixed inset-0 z-[5002] pointer-events-none scanlines"></div>
+
       {showConfetti && <ConfettiEffect />}
       
       <div className="absolute inset-0 z-0">
@@ -225,26 +232,26 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* HUD DE SIMULAÇÃO REVISADO */}
+      {/* HUD SIMULAÇÃO */}
       <div className="absolute top-12 inset-x-5 z-[2500] flex flex-col gap-2 pointer-events-none">
         <div className="flex justify-between items-start">
           <button 
             onClick={() => { setIsTestMode(!isTestMode); setSimTarget(null); }} 
-            className={`pointer-events-auto p-3 rounded-xl border transition-all shadow-xl active:scale-90 flex items-center gap-2 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/60 border-white/10 text-white/40'}`}
+            className={`pointer-events-auto p-3 rounded-xl border transition-all shadow-xl active:scale-90 flex items-center gap-2 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/80 backdrop-blur-md border-white/10 text-white/40'}`}
           >
             <Zap size={18} className={isTestMode ? 'fill-white animate-pulse' : ''} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{isTestMode ? 'SIMULADOR ATIVO' : 'MODO GPS REAL'}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest leading-none">{isTestMode ? 'SIMULADOR ATIVO' : 'SINAL GPS REAL'}</span>
           </button>
 
           {isTestMode && (
-            <div className="pointer-events-auto flex gap-1 bg-black/80 backdrop-blur-md border border-white/10 p-1 rounded-xl">
-               {[10, 20, 40].map(s => (
+            <div className="pointer-events-auto flex gap-1 bg-black/80 backdrop-blur-md border border-white/10 p-1 rounded-xl shadow-2xl">
+               {[10, 20, 50].map(s => (
                  <button 
                   key={s} 
                   onClick={() => setSimSpeed(s)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${simSpeed === s ? 'bg-orange-600 text-white' : 'text-white/30 hover:bg-white/5'}`}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${simSpeed === s ? 'bg-orange-600 text-white shadow-lg' : 'text-white/30 hover:bg-white/5'}`}
                  >
-                   {s === 40 ? 'RUN' : s === 20 ? 'JOG' : 'WALK'}
+                   {s === 50 ? 'RUN' : s === 20 ? 'JOG' : 'WALK'}
                  </button>
                ))}
             </div>
@@ -252,10 +259,10 @@ const App: React.FC = () => {
         </div>
 
         {isTestMode && simTarget && (
-           <div className="bg-orange-600/20 backdrop-blur-md border border-orange-500/50 p-3 rounded-xl flex items-center justify-between animate-in slide-in-from-top duration-300">
+           <div className="bg-orange-600/10 backdrop-blur-xl border border-orange-500/30 p-3 rounded-xl flex items-center justify-between animate-in slide-in-from-top duration-300 shadow-2xl">
               <div className="flex items-center gap-2">
-                <Navigation size={12} className="text-orange-500 animate-bounce" />
-                <span className="text-[8px] font-black uppercase tracking-widest text-orange-200">A caminho do objetivo...</span>
+                <Navigation size={12} className="text-orange-500 animate-pulse" />
+                <span className="text-[8px] font-black uppercase tracking-widest text-orange-200">INTERPOLAÇÃO TÁTICA ATIVA...</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black italic text-white">{simSpeed} KM/H</span>
@@ -270,11 +277,14 @@ const App: React.FC = () => {
       {view === AppState.LOGIN && (
         <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8">
            <Radio size={40} className="text-blue-600 mb-4 animate-pulse" />
-           <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase">DmN</h1>
+           <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase leading-none">DOMINA</h1>
            <div className="w-full max-w-xs space-y-3">
-              <input type="text" placeholder="CODENAME" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-sm" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-              <input type="password" placeholder="KEY" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-sm" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              {loginError && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1">{loginError}</p>}
+              <div className="relative">
+                <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
+                <input type="text" placeholder="CODINOME" className="w-full bg-white/5 border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+              </div>
+              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              {loginError && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-bounce">{loginError}</p>}
               <div className="flex gap-2 w-full pt-2">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-black italic uppercase text-xs">LOGIN</button>
                 <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 p-4 rounded-xl font-black italic uppercase text-xs">JOIN</button>
@@ -285,20 +295,20 @@ const App: React.FC = () => {
 
       {view === AppState.HOME && user && (
         <div className="absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none">
-          <div className="flex justify-between items-center mb-3 pointer-events-auto bg-black/40 backdrop-blur-md p-3 rounded-2xl border border-white/10">
+          <div className="flex justify-between items-center mb-4 pointer-events-auto bg-black/80 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
             <div className="flex gap-3 items-center" onClick={() => { localStorage.removeItem('dmn_user_session'); setUser(null); setView(AppState.LOGIN); }}>
-              <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden">
+              <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden shadow-inner">
                 <img src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.nickname}`} className="w-full h-full object-cover" />
               </div>
               <div>
                 <h3 className="font-black italic uppercase text-sm leading-none">{user.nickname}</h3>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase">LVL {user.level}</span>
+                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">AGENT LVL {user.level}</span>
                 </div>
               </div>
             </div>
-            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-2 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all">
-              <Globe size={18} className="text-blue-400" />
+            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-2.5 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all">
+              <Globe size={20} className="text-blue-400" />
             </button>
           </div>
           <div className="pointer-events-auto relative">
@@ -307,9 +317,9 @@ const App: React.FC = () => {
                 setView(AppState.ACTIVE); 
                 setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation!], fullPath: [userLocation!], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); 
               }} 
-              className="w-full bg-blue-600 py-5 rounded-3xl font-black text-xl italic uppercase shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800"
+              className="w-full bg-blue-600 py-6 rounded-3xl font-black text-xl italic uppercase shadow-[0_0_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800"
             >
-              <ActivityIcon size={22} /> INICIAR MISSÃO
+              <ActivityIcon size={24} /> INICIAR CONQUISTA
             </button>
           </div>
         </div>
@@ -336,6 +346,22 @@ const App: React.FC = () => {
           onFinish={handleFinishMission} 
         />
       )}
+
+      <style>{`
+        .vignette-overlay {
+          background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 120%);
+        }
+        .grain-overlay {
+          background-image: url("https://grainy-gradients.vercel.app/noise.svg");
+          opacity: 0.04;
+          filter: contrast(150%) brightness(100%);
+        }
+        .scanlines {
+          background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+          background-size: 100% 2px, 3px 100%;
+          opacity: 0.1;
+        }
+      `}</style>
     </div>
   );
 };
