@@ -114,13 +114,9 @@ const GameMap: React.FC<GameMapProps> = ({
     territoryGroupRef.current.clearLayers();
     labelGroupRef.current.clearLayers();
 
-    const showIdentity = zoomLevel >= 17;
-
     (Object.values(cells) as any[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
-      const ownerNickname = cell.ownerNickname || activeOwner?.nickname;
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
-      const ownerAvatarUrl = cell.ownerAvatarUrl || activeOwner?.avatarUrl;
 
       const b = getCellBounds(cell.id);
       const leafletBounds: L.LatLngExpression[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
@@ -134,33 +130,6 @@ const GameMap: React.FC<GameMapProps> = ({
         fillOpacity: cell.ownerId ? 0.4 : 0.2,
         interactive: false
       }).addTo(territoryGroupRef.current!);
-
-      // Mostra nomes apenas se o nickname existir e em zooms adequados
-      if (showIdentity && ownerNickname) {
-        const centerLat = (b[0] + b[2]) / 2;
-        const centerLng = (b[1] + b[3]) / 2;
-        
-        // Aumentado para scale-[0.5] para melhor visibilidade
-        L.marker([centerLat, centerLng], {
-          icon: L.divIcon({
-            className: 'cell-identity-label',
-            html: `
-              <div class="flex flex-col items-center justify-center scale-[0.5] origin-center">
-                ${ownerAvatarUrl ? `
-                <div class="w-12 h-12 rounded-full border-2 border-white overflow-hidden shadow-2xl bg-black">
-                  <img src="${ownerAvatarUrl}" class="w-full h-full object-cover" />
-                </div>` : ''}
-                <div class="mt-1 px-3 py-1 bg-black rounded-lg border border-white/20 whitespace-nowrap shadow-2xl">
-                   <span class="text-[14px] font-black uppercase tracking-tighter text-white">${ownerNickname}</span>
-                </div>
-              </div>
-            `,
-            iconSize: [60, 60],
-            iconAnchor: [30, 30]
-          }),
-          interactive: false
-        }).addTo(labelGroupRef.current!);
-      }
     });
   }, [cells, users, zoomLevel]);
 
