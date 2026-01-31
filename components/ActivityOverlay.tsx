@@ -14,31 +14,31 @@ const ActivityOverlay: React.FC<ActivityOverlayProps> = ({ activity, onStop, use
   const userColor = user?.color || '#3B82F6';
 
   return (
-    <div className="absolute inset-0 p-8 flex flex-col pointer-events-none z-[1500]">
-      <div className="mt-20 text-center animate-in fade-in slide-in-from-top duration-700">
-        <div className="text-[84px] font-[900] tracking-tighter leading-none italic" style={{ color: userColor }}>
-          {area.toLocaleString()}<span className="text-2xl ml-2 opacity-50 not-italic">m²</span>
+    <div className="absolute inset-0 p-6 flex flex-col pointer-events-none z-[1500]">
+      <div className="mt-16 text-center animate-in fade-in slide-in-from-top duration-500">
+        <div className="text-[64px] font-[900] tracking-tighter leading-none italic" style={{ color: userColor }}>
+          {area.toLocaleString()}<span className="text-xl ml-1 opacity-50 not-italic">m²</span>
         </div>
-        <div className="text-[10px] font-black uppercase tracking-[0.5em] text-white/40 mt-4">Sincronização de Rede DmN</div>
+        <div className="text-[8px] font-black uppercase tracking-[0.4em] text-white/40 mt-2">Sincronização em Tempo Real</div>
       </div>
 
-      <div className="mt-auto flex flex-col gap-4 pointer-events-auto pb-12">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-black/70 backdrop-blur-xl border border-white/10 p-6 rounded-[2.5rem] text-center shadow-2xl">
-            <div className="text-[10px] font-black text-white/30 uppercase mb-1 tracking-widest">Distância</div>
-            <div className="text-2xl font-black italic">{(activity.distanceMeters/1000).toFixed(2)}km</div>
+      <div className="mt-auto flex flex-col gap-3 pointer-events-auto pb-8">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-black/60 backdrop-blur-lg border border-white/10 p-4 rounded-3xl text-center">
+            <div className="text-[8px] font-black text-white/30 uppercase mb-0.5 tracking-widest">Distância</div>
+            <div className="text-xl font-black italic">{(activity.distanceMeters/1000).toFixed(2)}km</div>
           </div>
-          <div className="bg-black/70 backdrop-blur-xl border border-white/10 p-6 rounded-[2.5rem] text-center shadow-2xl">
-            <div className="text-[10px] font-black text-white/30 uppercase mb-1 tracking-widest">Estado</div>
-            <div className="text-2xl font-black italic text-green-500 animate-pulse">ATIVO</div>
+          <div className="bg-black/60 backdrop-blur-lg border border-white/10 p-4 rounded-3xl text-center">
+            <div className="text-[8px] font-black text-white/30 uppercase mb-0.5 tracking-widest">Sinal</div>
+            <div className="text-xl font-black italic text-green-500 animate-pulse">OK</div>
           </div>
         </div>
         
         <button 
           onClick={onStop}
-          className="w-full bg-red-600 py-6 rounded-[2.5rem] font-black text-xl uppercase italic shadow-2xl active:scale-95 transition-all border-b-4 border-red-800"
+          className="w-full bg-red-600 py-5 rounded-3xl font-black text-lg uppercase italic shadow-lg active:scale-95 transition-all border-b-4 border-red-800"
         >
-          ENCERRAR PROTOCOLO
+          ENCERRAR MISSÃO
         </button>
       </div>
     </div>

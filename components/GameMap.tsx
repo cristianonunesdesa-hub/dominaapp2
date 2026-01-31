@@ -38,13 +38,11 @@ const GameMap: React.FC<GameMapProps> = ({
         inertia: true
       }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 16);
 
-      // Tiles Dark Matter - Baixo contraste, foco no HUD
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 20, 
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Setup do Canvas para efeito de Plasma/Metaballs
       territoryCanvasRef.current = L.canvas({ 
         padding: 0.5, 
         className: 'territory-canvas-layer' 
@@ -68,22 +66,61 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
-  // Renderização das Células com efeito Metaball
+  // Sincronização de Marcadores (Criar, Mover, Remover)
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Atualiza/Cria marcadores para usuários ativos
+    // Fix: Explicitly typing the callback parameter to prevent TypeScript from inferring 'u' as 'unknown'
+    Object.values(users).forEach((u: User) => {
+      if (!u.lat || !u.lng) return;
+      
+      if (!playerMarkersRef.current[u.id]) {
+        playerMarkersRef.current[u.id] = L.marker([u.lat, u.lng], {
+          icon: L.divIcon({
+            className: 'player-marker',
+            html: `<div class="relative w-8 h-8 flex items-center justify-center">
+                    <div class="absolute inset-0 bg-white/20 blur-xl rounded-full animate-pulse"></div>
+                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-2xl">
+                      <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${u.color}"></div>
+                    </div>
+                  </div>`,
+            iconSize: [32, 32], iconAnchor: [16, 16]
+          })
+        }).addTo(mapRef.current!);
+      } else {
+        playerMarkersRef.current[u.id].setLatLng([u.lat, u.lng]);
+      }
+    });
+
+    // Remove marcadores de quem sumiu do radar (estale)
+    Object.keys(playerMarkersRef.current).forEach((id) => {
+      if (!users[id] && id !== activeUserId) {
+        playerMarkersRef.current[id].remove();
+        delete playerMarkersRef.current[id];
+      }
+    });
+
+    // Centraliza no usuário ativo
+    if (userLocation) {
+      mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true });
+    }
+
+  }, [users, userLocation, activeUserId]);
+
+  // Renderização das Células
   useEffect(() => {
     if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
     
-    Object.values(cells).forEach((cell: any) => {
-      // Cores elétricas: Azul para aliado, Vermelho para hostil
+    // Fix: Explicitly typing the callback parameter to prevent TypeScript from inferring 'cell' as 'unknown'
+    Object.values(cells).forEach((cell: Cell) => {
       const isHostile = cell.ownerId !== activeUserId && cell.ownerId !== null;
       const color = isHostile ? '#EF4444' : (cell.ownerColor || '#3B82F6');
-      
       const [lat, lng] = cell.id.split('_').map(parseFloat);
       
-      // Círculos maiores que o grid para criar sobreposição (overlap)
-      // O filtro CSS transformará esses círculos em "manchas orgânicas"
       L.circle([lat, lng], {
-        radius: 24, // Maior para permitir fusão visual
+        radius: 22,
         renderer: territoryCanvasRef.current!, 
         stroke: false, 
         fillColor: color, 
@@ -91,30 +128,6 @@ const GameMap: React.FC<GameMapProps> = ({
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, activeUserId]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const updateMarker = (uId: string, lat: number, lng: number, color: string) => {
-      if (!playerMarkersRef.current[uId]) {
-        playerMarkersRef.current[uId] = L.marker([lat, lng], {
-          icon: L.divIcon({
-            className: 'player-marker',
-            html: `<div class="relative w-8 h-8 flex items-center justify-center">
-                    <div class="absolute inset-0 bg-white/20 blur-xl rounded-full animate-pulse"></div>
-                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-2xl">
-                      <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></div>
-                    </div>
-                  </div>`,
-            iconSize: [32, 32], iconAnchor: [16, 16]
-          })
-        }).addTo(mapRef.current!);
-      } else {
-        playerMarkersRef.current[uId].setLatLng([lat, lng]);
-      }
-      if (uId === activeUserId) mapRef.current?.panTo([lat, lng], { animate: true });
-    };
-    if (userLocation && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser.color);
-  }, [users, userLocation, activeUser]);
 
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
@@ -130,32 +143,24 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        /* O segredo do efeito Metaball/Plasma: Blur + Alto Contraste */
         .leaflet-pane.leaflet-overlay-pane {
           filter: blur(14px) contrast(35) brightness(1.1);
           mix-blend-mode: screen;
           opacity: 0.85;
           animation: territoryBreath 8s ease-in-out infinite;
         }
-
         .map-tiles { 
-          opacity: 0.2; 
+          opacity: 0.25; 
           filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1); 
         }
-
-        .leaflet-container { 
-          background: #000000 !important; 
-        }
-
         .player-marker { 
-          transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); 
+          transition: all 0.5s ease-out; 
           z-index: 1000 !important; 
-          filter: none !important; /* Marcador de jogador não deve ter blur */
+          filter: none !important;
         }
-
         @keyframes territoryBreath {
-          0%, 100% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.02); opacity: 0.9; }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.01); }
         }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full outline-none" />
