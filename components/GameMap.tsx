@@ -19,118 +19,83 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
-  const fullPathLayerRef = useRef<L.Polyline | null>(null);
   const territoryCanvasRef = useRef<L.Canvas | null>(null);
-  const trailCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
   const mapId = 'dmn-tactical-map';
 
-  const onMapClickRef = useRef(onMapClick);
-  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
-
   useEffect(() => {
     if (!mapRef.current) {
-      const initialLat = userLocation?.lat || -23.5505;
-      const initialLng = userLocation?.lng || -46.6333;
-
       mapRef.current = L.map(mapId, {
-        zoomControl: false,
-        attributionControl: false,
-        preferCanvas: true,
-        fadeAnimation: true
-      }).setView([initialLat, initialLng], 17);
+        zoomControl: false, attributionControl: false, preferCanvas: true
+      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 17);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 22,
-        subdomains: 'abcd',
-        className: 'map-tiles'
+        maxZoom: 22, className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      territoryCanvasRef.current = L.canvas({ padding: 0.5, className: 'territory-liquid-engine' }).addTo(mapRef.current);
-      trailCanvasRef.current = L.canvas({ padding: 0.1, className: 'tactical-trail-engine' }).addTo(mapRef.current);
+      territoryCanvasRef.current = L.canvas({ padding: 0.5, className: 'territory-layer' }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
-      fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', 
-        weight: 2, opacity: 0.2, dashArray: '4, 8', renderer: trailCanvasRef.current
-      }).addTo(mapRef.current);
-
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', 
-        weight: 5, opacity: 0.8, lineCap: 'round', lineJoin: 'round', renderer: trailCanvasRef.current
+        color: activeUser?.color || '#FFFFFF', weight: 5, opacity: 0.8, lineCap: 'round'
       }).addTo(mapRef.current);
 
-      mapRef.current.on('click', (e) => { 
-        if (onMapClickRef.current) onMapClickRef.current(e.latlng.lat, e.latlng.lng); 
-      });
+      mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
     }
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !territoryGroupRef.current) return;
+    if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
-    (Object.values(cells) as Cell[]).forEach((cell) => {
-      const activeOwner = users[cell.ownerId || ''];
-      const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
-      const [latStr, lngStr] = cell.id.split('_');
-      L.circle([parseFloat(latStr), parseFloat(lngStr)], {
-        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, fillColor: ownerColor, fillOpacity: 0.6, interactive: false
+    Object.values(cells).forEach((cell: any) => {
+      const color = cell.ownerColor || '#444444';
+      const [lat, lng] = cell.id.split('_').map(parseFloat);
+      L.circle([lat, lng], {
+        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, 
+        fillColor: color, fillOpacity: 1.0 // Sólido no canvas, opacidade controlada via CSS
       }).addTo(territoryGroupRef.current!);
     });
-  }, [cells, users]);
+  }, [cells]);
 
   useEffect(() => {
     if (!mapRef.current) return;
-    const updateMarker = (uId: string, lat: number, lng: number, uData: Partial<User>) => {
-      const pos: L.LatLngExpression = [lat, lng];
-      const isMe = uId === activeUserId;
-      const color = uData.color || '#3B82F6';
-
+    const updateMarker = (uId: string, lat: number, lng: number, color: string) => {
       if (!playerMarkersRef.current[uId]) {
-        playerMarkersRef.current[uId] = L.marker(pos, {
+        playerMarkersRef.current[uId] = L.marker([lat, lng], {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="relative flex items-center justify-center w-6 h-6"><div class="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-[1.5px] border-white/80 flex items-center justify-center relative z-10"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div></div>`,
-            iconSize: [24, 24], iconAnchor: [12, 12]
-          }),
-          zIndexOffset: isMe ? 1000 : 900
+            html: `<div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center shadow-lg"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div>`,
+            iconSize: [16, 16], iconAnchor: [8, 8]
+          })
         }).addTo(mapRef.current!);
       } else {
-        playerMarkersRef.current[uId].setLatLng(pos);
+        playerMarkersRef.current[uId].setLatLng([lat, lng]);
       }
-      if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.3 });
+      if (uId === activeUserId) mapRef.current?.panTo([lat, lng]);
     };
-    (Object.values(users) as User[]).forEach(u => { if (u.id !== activeUserId && u.lat && u.lng) updateMarker(u.id, u.lat, u.lng, u); });
-    if (userLocation && activeUserId && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
-  }, [users, activeUserId, userLocation, activeUser]);
+    if (userLocation && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser.color);
+  }, [users, userLocation]);
 
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
-      activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple));
+      activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
       if (activeUser) activeTrailLayerRef.current.setStyle({ color: activeUser.color });
     }
-    if (fullPathLayerRef.current) {
-      fullPathLayerRef.current.setLatLngs(currentPath.map(p => [p.lat, p.lng] as L.LatLngTuple));
-      if (activeUser) fullPathLayerRef.current.setStyle({ color: activeUser.color });
-    }
-  }, [activeTrail, currentPath, activeUser]);
+  }, [activeTrail, activeUser]);
 
   return (
     <>
       <style>{`
-        .leaflet-container { background: #080808 !important; }
-        .territory-liquid-engine { 
-          filter: blur(4px); 
-          opacity: 0.6; /* OPACIDADE EM 60% REAIS SEM SCREEN BLENDING */
-          z-index: 400; 
-          pointer-events: none !important; 
+        .territory-layer { 
+          opacity: 0.6 !important; /* OPACIDADE FIXA EM 60% */
+          filter: blur(6px); /* Efeito suave sem estourar a cor */
+          pointer-events: none;
         }
-        .tactical-trail-engine { filter: drop-shadow(0 0 4px rgba(255,255,255,0.2)); z-index: 401; pointer-events: none !important; }
-        .player-marker { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .map-tiles { opacity: 0.4; filter: invert(100%) hue-rotate(180deg) brightness(0.4) saturate(0.1); }
+        .map-tiles { opacity: 0.4; filter: invert(100%) brightness(0.5); }
+        .leaflet-container { background: #000 !important; }
       `}</style>
-      <div id={mapId} className="h-full w-full outline-none" />
+      <div id={mapId} className="h-full w-full" />
     </>
   );
 };
