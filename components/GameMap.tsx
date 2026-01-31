@@ -39,7 +39,8 @@ const GameMap: React.FC<GameMapProps> = ({
       mapRef.current = L.map(mapId, {
         zoomControl: false,
         attributionControl: false,
-        preferCanvas: true
+        preferCanvas: true,
+        fadeAnimation: true
       }).setView([initialLat, initialLng], 17);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -48,10 +49,10 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Renderer para o efeito "Liquid"
+      // Renderer para o efeito "Liquid Territory"
       canvasLayerRef.current = L.canvas({ 
         padding: 0.5,
-        className: 'territory-liquid-layer' 
+        className: 'territory-liquid-engine' 
       }).addTo(mapRef.current);
 
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
@@ -72,8 +73,7 @@ const GameMap: React.FC<GameMapProps> = ({
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
-    // Renderizamos cada célula como um círculo grande o suficiente para fundir com os vizinhos
-    // Fix: Cast Object.values to Cell[] to ensure TypeScript correctly identifies properties on the 'cell' object
+    // Renderizamos cada célula como um círculo de influência
     (Object.values(cells) as Cell[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
@@ -82,14 +82,13 @@ const GameMap: React.FC<GameMapProps> = ({
       const centerLat = parseFloat(latStr);
       const centerLng = parseFloat(lngStr);
 
-      // Usamos círculos em vez de polígonos. 
-      // O raio é ligeiramente maior que a distância entre células para garantir sobreposição total.
+      // O raio tático de 10 metros garante que os círculos se fundam em uma massa líquida
       L.circle([centerLat, centerLng], {
-        radius: 8, // Metros (suficiente para cobrir a GRID_SIZE de 0.00006)
+        radius: 10,
         renderer: canvasLayerRef.current,
         stroke: false,
         fillColor: ownerColor,
-        fillOpacity: 1, // Opacidade total para o filtro contrast trabalhar
+        fillOpacity: 1, 
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
@@ -107,8 +106,8 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker(pos, {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-2xl flex items-center justify-center overflow-hidden" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover" /></div>`,
-            iconSize: [40, 40], iconAnchor: [20, 20]
+            html: `<div class="relative"><div class="absolute -inset-4 bg-white/10 blur-xl rounded-full"></div><div class="w-12 h-12 rounded-full bg-black border-[3px] shadow-2xl flex items-center justify-center overflow-hidden relative z-10" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover" /></div></div>`,
+            iconSize: [48, 48], iconAnchor: [24, 24]
           }),
           zIndexOffset: isMe ? 1000 : 900
         }).addTo(mapRef.current!);
@@ -132,18 +131,19 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        .leaflet-container { background: #0b0d11 !important; }
+        .leaflet-container { background: #080808 !important; }
         
-        /* O SEGREDO DA SUAVIDADE: Efeito Metaball */
-        /* Blur funde as cores, Contrast endurece as bordas, Opacity traz a transparência do app de referência */
-        .territory-liquid-layer {
-          filter: blur(12px) contrast(350%) brightness(1.1);
-          opacity: 0.6;
-          mix-blend-mode: screen;
+        /* MOTOR DE FLUIDEZ TÁTICA (METABALLS) */
+        /* O blur alto seguido de um contraste agressivo funde os círculos em uma área orgânica */
+        .territory-liquid-engine {
+          filter: blur(14px) contrast(400%) brightness(1.2);
+          opacity: 0.65;
+          mix-blend-mode: plus-lighter;
           pointer-events: none !important;
         }
 
-        .player-marker { transition: transform 0.2s linear; }
+        .player-marker { transition: transform 0.2s cubic-bezier(0.1, 0.7, 1.0, 0.1); }
+        .map-tiles { opacity: 0.4; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" />
     </>

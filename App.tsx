@@ -205,19 +205,19 @@ const App: React.FC = () => {
       )}
 
       {view === AppState.TUTORIAL && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-md z-[600] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-[#111111] rounded-[40px] p-10 border border-white/10 shadow-2xl animate-in zoom-in duration-300">
-            <div className="flex items-center gap-4 mb-6">
-               <div className="w-12 h-12 bg-red-500 rounded-2xl flex items-center justify-center font-black italic">INTVL</div>
-               <p className="text-sm font-bold text-white/80 leading-relaxed">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
+          <div className="w-full max-w-sm bg-[#151515] rounded-[48px] p-12 border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
+            <div className="flex items-start gap-5 mb-10">
+               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-xl shadow-lg shadow-red-500/20">DmN</div>
+               <p className="text-[15px] font-bold text-white leading-snug pt-1">
                  Corra para conquistar o território, mas garanta que o ponto de início e fim estejam a menos de 200m para valer!
                </p>
             </div>
             <button 
               onClick={confirmTutorial}
-              className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-lg"
+              className="w-full bg-white text-black py-6 rounded-[28px] font-[900] uppercase text-xl tracking-wide shadow-xl active:scale-95 transition-all"
             >
-              Next
+              NEXT
             </button>
           </div>
         </div>
