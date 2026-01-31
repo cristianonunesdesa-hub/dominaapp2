@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
 import { TACTICAL_COLORS } from './constants';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
+import { generateBattleReport } from './services/gemini';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio, Settings, Zap, MapPin } from 'lucide-react';
+import { Radio, Zap, MapPin, ChevronRight, Share2, Target } from 'lucide-react';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -27,6 +28,8 @@ const App: React.FC = () => {
   const [globalUsers, setGlobalUsers] = useState<Record<string, any>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
+  const [battleReport, setBattleReport] = useState<string>('');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -68,67 +71,49 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (isTestMode) {
-      if (!userLocation) {
-        setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
-      }
+      if (!userLocation) setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
       return; 
     }
-    
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() }),
-      (err) => console.warn("GPS Error:", err),
-      { enableHighAccuracy: true }
+      null, { enableHighAccuracy: true }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
   const handleMapClick = (lat: number, lng: number) => {
-    if (isTestMode) {
-      const newPoint = { lat, lng, timestamp: Date.now() };
-      setUserLocation(newPoint);
-    }
+    if (isTestMode) setUserLocation({ lat, lng, timestamp: Date.now() });
   };
 
   useEffect(() => {
     if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
       const points = [...currentActivity.points];
       const lastPoint = points[points.length - 1];
-      
       if (lastPoint) {
         const d = calculateDistance(lastPoint, userLocation);
-        const threshold = isTestMode ? 0.05 : 1.2; // Threshold ainda menor para cliques
-        
+        const threshold = isTestMode ? 0.02 : 1.2;
         if (d > threshold) {
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
-          
           if (newPoints.length > 3) {
             const pA = newPoints[newPoints.length - 2];
             const pB = newPoints[newPoints.length - 1];
-            
-            // Verificação de interseção para fechar o polígono
             for (let i = 0; i < newPoints.length - 3; i++) {
               if (segmentsIntersect(pA, pB, newPoints[i], newPoints[i + 1])) {
                 const polygon = [...newPoints.slice(i), newPoints[i]];
                 const enclosedIds = getEnclosedCellIds(polygon);
-                
                 if (enclosedIds.length > 0) {
                   const syncCells: Cell[] = [];
                   enclosedIds.forEach(id => {
                     if (!currentActivity.capturedCellIds.has(id)) {
-                      const c: Cell = { id, ownerId: user.id, ownerNickname: user.nickname, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 };
-                      syncCells.push(c);
+                      syncCells.push({ id, ownerId: user.id, ownerNickname: user.nickname, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 });
                       currentActivity.capturedCellIds.add(id);
                     }
                   });
                   syncGlobalState(syncCells); 
-                  // Resetar a trilha de "desenho" mas manter o histórico total no fullPath
-                  setCurrentActivity({ 
-                    ...currentActivity, 
-                    points: [userLocation], 
-                    fullPath: newFullPath, 
-                    distanceMeters: currentActivity.distanceMeters + d 
-                  });
+                  setShowConfetti(true);
+                  setTimeout(() => setShowConfetti(false), 3000);
+                  setCurrentActivity({ ...currentActivity, points: [userLocation], fullPath: newFullPath, distanceMeters: currentActivity.distanceMeters + d });
                   return;
                 }
               }
@@ -139,6 +124,22 @@ const App: React.FC = () => {
       }
     }
   }, [userLocation, view, isTestMode]);
+
+  const stopActivity = async () => {
+    if (!currentActivity) return;
+    setIsGeneratingReport(true);
+    setView(AppState.SUMMARY);
+    const finalActivity = { ...currentActivity, endTime: Date.now() };
+    setCurrentActivity(finalActivity);
+    
+    // Sincronização final
+    await syncGlobalState();
+    
+    // Relatório IA
+    const report = await generateBattleReport(finalActivity, user?.nickname || 'Agente');
+    setBattleReport(report);
+    setIsGeneratingReport(false);
+  };
 
   const handleAuth = async (action: 'login' | 'register') => {
     const selectedColor = getDeterministicColor(loginNickname.toLowerCase());
@@ -156,69 +157,29 @@ const App: React.FC = () => {
     } catch (err: any) { setLoginError(err.message); }
   };
 
-  const startRun = () => {
-    if (!userLocation && !isTestMode) return alert("Buscando satélites...");
-    setView(AppState.TUTORIAL);
-  };
-
-  const confirmTutorial = () => {
-    setCurrentActivity({ 
-      id: `act_${Date.now()}`, 
-      startTime: Date.now(), 
-      points: [userLocation!], 
-      fullPath: [userLocation!], 
-      capturedCellIds: new Set(), 
-      stolenCellIds: new Set(), 
-      distanceMeters: 0, 
-      isValid: true, 
-      strategicZonesEntered: 0 
-    });
-    setView(AppState.ACTIVE);
-  };
-
   return (
-    <div className="relative h-full w-full bg-black overflow-hidden font-sans">
+    <div className="relative h-full w-full bg-black overflow-hidden font-sans text-white">
       {showConfetti && <ConfettiEffect />}
       
-      <button 
-        onClick={() => setIsTestMode(!isTestMode)}
-        className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[22px] border shadow-2xl transition-all active:scale-90 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/60 border-white/10 text-white/40'}`}
-      >
+      {/* Botão de Modo Teste */}
+      <button onClick={() => setIsTestMode(!isTestMode)} className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[22px] border shadow-2xl transition-all ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}>
         <Zap size={22} className={isTestMode ? 'fill-white' : ''} />
       </button>
 
-      {isTestMode && (
-        <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md px-6 py-2 rounded-2xl flex flex-col items-center shadow-2xl border border-white/20">
-           <span className="text-[10px] font-black uppercase tracking-widest text-white">MODO SIMULAÇÃO</span>
-           <div className="text-[8px] font-bold text-white/70 uppercase">Clique no mapa para mover o agente</div>
-        </div>
-      )}
-
       <div className="absolute inset-0 z-0">
         <GameMap 
-          userLocation={userLocation} 
-          cells={cells} 
-          users={globalUsers} 
-          activeUserId={user?.id || ''} 
-          activeUser={user}
-          currentPath={currentActivity?.fullPath || []} 
-          activeTrail={currentActivity?.points || []}
-          onMapClick={handleMapClick}
+          userLocation={userLocation} cells={cells} users={globalUsers} activeUserId={user?.id || ''} activeUser={user}
+          currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []} onMapClick={handleMapClick}
         />
       </div>
 
       {view === AppState.LOGIN && (
         <div className="absolute inset-0 bg-[#080808] z-[500] flex flex-col items-center justify-center p-8">
-           <div className="text-center mb-12">
-              <div className="w-20 h-20 bg-blue-600 rounded-[28px] mx-auto mb-6 flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.3)]">
-                <Radio size={40} />
-              </div>
-              <h1 className="text-5xl font-black italic tracking-tighter uppercase">DmN</h1>
-           </div>
+           <div className="w-20 h-20 bg-blue-600 rounded-[28px] mb-6 flex items-center justify-center shadow-2xl"><Radio size={40} /></div>
+           <h1 className="text-5xl font-black italic tracking-tighter uppercase mb-12">DmN</h1>
            <div className="w-full max-w-xs space-y-4">
-              <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center focus:border-blue-500 outline-none transition-all" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-              <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center focus:border-blue-500 outline-none transition-all" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              {loginError && <p className="text-red-500 text-[10px] font-bold uppercase text-center">{loginError}</p>}
+              <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+              <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
               <div className="flex gap-2 pt-4">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase italic">Login</button>
                 <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 py-4 rounded-2xl font-black uppercase italic">Criar</button>
@@ -230,49 +191,65 @@ const App: React.FC = () => {
       {view === AppState.HOME && user && (
         <div className="absolute inset-x-0 bottom-0 p-8 z-50">
           <div className="flex justify-between items-end mb-6">
-            <div>
-              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Protocolo Ativo</p>
-              <h2 className="text-2xl font-black italic uppercase leading-none">{user.nickname}</h2>
-            </div>
-            <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${userLocation ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span className="text-[10px] font-black uppercase tracking-widest">Rede: {userLocation ? 'ONLINE' : 'OFF'}</span>
-            </div>
+            <div><p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Protocolo Ativo</p><h2 className="text-2xl font-black italic uppercase leading-none">{user.nickname}</h2></div>
+            <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${userLocation ? 'bg-green-500' : 'bg-red-500'}`}></div><span className="text-[10px] font-black uppercase tracking-widest">{userLocation ? 'ONLINE' : 'OFF'}</span></div>
           </div>
-          <button 
-            onClick={startRun}
-            className="w-full bg-blue-600 h-20 rounded-[32px] font-black text-2xl uppercase italic tracking-tighter shadow-[0_20px_60px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-4"
-          >
-            INICIAR CONQUISTA
-          </button>
+          <button onClick={() => setView(AppState.TUTORIAL)} className="w-full bg-blue-600 h-20 rounded-[32px] font-black text-2xl uppercase italic shadow-[0_20px_60px_rgba(37,99,235,0.4)] active:scale-95 transition-all">INICIAR CONQUISTA</button>
         </div>
       )}
 
       {view === AppState.TUTORIAL && (
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
-          <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-10 border border-white/10 shadow-2xl animate-in zoom-in duration-300">
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
+          <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-10 border border-white/10 shadow-2xl">
             <div className="flex items-start gap-4 mb-8">
-               <div className="w-14 h-14 bg-blue-600 rounded-[20px] flex-shrink-0 flex items-center justify-center font-black italic text-xl shadow-lg text-white">DmN</div>
-               <p className="text-[14px] font-bold text-white/90 leading-tight pt-1 uppercase italic tracking-tight">
-                 Cerque o território. O grid sincroniza quando você fecha o polígono tático.
-               </p>
+               <div className="w-14 h-14 bg-blue-600 rounded-[20px] flex-shrink-0 flex items-center justify-center font-black italic text-xl shadow-lg">DmN</div>
+               <p className="text-[14px] font-bold text-white/90 leading-tight pt-1 uppercase italic">Cerque o território. O grid sincroniza quando você fecha o polígono tático.</p>
             </div>
-            <button 
-              onClick={confirmTutorial}
-              className="w-full bg-white text-black py-5 rounded-[24px] font-black uppercase text-lg italic tracking-tighter shadow-xl active:scale-95 transition-all"
-            >
-              INICIAR PROTOCOLO
-            </button>
+            <button onClick={() => {
+              setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation!], fullPath: [userLocation!], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 });
+              setView(AppState.ACTIVE);
+            }} className="w-full bg-white text-black py-5 rounded-[24px] font-black uppercase text-lg italic shadow-xl active:scale-95 transition-all">INICIAR PROTOCOLO</button>
           </div>
         </div>
       )}
 
       {view === AppState.ACTIVE && currentActivity && (
-        <ActivityOverlay 
-          activity={currentActivity} 
-          user={user} 
-          onStop={() => setView(AppState.HOME)} 
-        />
+        <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />
+      )}
+
+      {view === AppState.SUMMARY && currentActivity && (
+        <div className="absolute inset-0 bg-black z-[700] flex flex-col p-8 overflow-y-auto">
+          <div className="pt-12 mb-10 flex justify-between items-start">
+            <div>
+              <h2 className="text-4xl font-black italic uppercase tracking-tighter leading-none">Missão<br/>Concluída</h2>
+              <p className="text-blue-500 font-black uppercase text-[10px] tracking-widest mt-2">Relatório de Operação de Campo</p>
+            </div>
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10"><Share2 size={24} /></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div className="bg-white/5 p-6 rounded-[32px] border border-white/5">
+               <div className="text-[10px] font-black text-gray-500 uppercase mb-1">Domínio</div>
+               <div className="text-2xl font-black italic">{(currentActivity.capturedCellIds.size * 45).toLocaleString()}<span className="text-xs ml-1 opacity-50">m²</span></div>
+            </div>
+            <div className="bg-white/5 p-6 rounded-[32px] border border-white/5">
+               <div className="text-[10px] font-black text-gray-500 uppercase mb-1">Distância</div>
+               <div className="text-2xl font-black italic">{(currentActivity.distanceMeters/1000).toFixed(2)}<span className="text-xs ml-1 opacity-50">km</span></div>
+            </div>
+          </div>
+
+          <div className="bg-blue-600/10 border border-blue-500/20 p-8 rounded-[40px] mb-12 relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-6 opacity-10"><Target size={80} /></div>
+             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Análise Tática (IA)</p>
+             {isGeneratingReport ? (
+               <div className="flex items-center gap-3"><div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-xs font-bold uppercase animate-pulse">Descriptografando dados...</span></div>
+             ) : (
+               <p className="text-lg font-bold italic leading-tight text-white/90">"{battleReport}"</p>
+             )}
+          </div>
+
+          <button onClick={() => setView(AppState.HOME)} className="w-full bg-white text-black py-6 rounded-[32px] font-black uppercase text-xl italic mt-auto flex items-center justify-center gap-2">FECHAR RELATÓRIO <ChevronRight size={24} /></button>
+        </div>
       )}
     </div>
   );
