@@ -105,39 +105,78 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full bg-black text-white relative overflow-hidden">
       {showConfetti && <ConfettiEffect />}
-      <GameMap userLocation={userLocation} cells={cells} users={globalUsers} activeUserId={user?.id || ''} activeUser={user} currentPath={[]} activeTrail={currentActivity?.points} onMapClick={(lat, lng) => isTestMode && setUserLocation({ lat, lng, timestamp: Date.now() })} />
       
-      <button onClick={() => setIsTestMode(!isTestMode)} className={`absolute top-14 right-6 z-[100] p-4 rounded-2xl border ${isTestMode ? 'bg-orange-600' : 'bg-black/50'}`}><Zap size={20} /></button>
+      {/* MAPA NA CAMADA BASE */}
+      <div className="absolute inset-0 z-0">
+        <GameMap 
+          userLocation={userLocation} 
+          cells={cells} 
+          users={globalUsers} 
+          activeUserId={user?.id || ''} 
+          activeUser={user} 
+          currentPath={[]} 
+          activeTrail={currentActivity?.points} 
+          onMapClick={(lat, lng) => isTestMode && setUserLocation({ lat, lng, timestamp: Date.now() })} 
+        />
+      </div>
+      
+      {/* UI EM CAMADAS SUPERIORES (z-[1000]+) */}
+      <button 
+        onClick={() => setIsTestMode(!isTestMode)} 
+        className={`absolute top-14 right-6 z-[1100] p-4 rounded-2xl border transition-all shadow-2xl ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10'}`}
+      >
+        <Zap size={20} />
+      </button>
 
       {view === AppState.LOGIN && (
-        <div className="absolute inset-0 bg-black z-[500] flex flex-col items-center justify-center p-8">
+        <div className="absolute inset-0 bg-black z-[2000] flex flex-col items-center justify-center p-8">
            <Radio size={48} className="text-blue-600 mb-4" />
-           <h1 className="text-4xl font-black italic mb-8">DmN</h1>
-           <input type="text" placeholder="AGENTE" className="w-full bg-white/5 p-4 rounded-xl mb-2" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-           <input type="password" placeholder="SENHA" className="w-full bg-white/5 p-4 rounded-xl mb-4" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-           {loginError && <p className="text-red-500 text-xs mb-4">{loginError}</p>}
-           <div className="flex gap-2 w-full"><button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-bold">LOGIN</button><button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 p-4 rounded-xl font-bold">CRIAR</button></div>
+           <h1 className="text-4xl font-black italic mb-8 tracking-tighter">DmN</h1>
+           <div className="w-full max-w-xs space-y-3">
+              <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-bold" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+              <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-bold" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center">{loginError}</p>}
+              <div className="flex gap-2 w-full pt-4">
+                <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-black italic uppercase">LOGIN</button>
+                <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 p-4 rounded-xl font-black italic uppercase">CRIAR</button>
+              </div>
+           </div>
         </div>
       )}
 
       {view === AppState.HOME && (
-        <div className="absolute bottom-0 inset-x-0 p-8 z-50">
-          <p className="text-blue-500 font-bold text-xs">PROTOCOLO ATIVO</p>
-          <h2 className="text-3xl font-black italic mb-6">{user?.nickname}</h2>
-          <button onClick={() => { setView(AppState.ACTIVE); setCurrentActivity({ id: '1', startTime: Date.now(), points: [userLocation!], fullPath: [], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); }} className="w-full bg-blue-600 py-6 rounded-[2rem] font-black text-2xl italic shadow-2xl">INICIAR CONQUISTA</button>
+        <div className="absolute bottom-0 inset-x-0 p-8 z-[1000] pointer-events-none">
+          <div className="pointer-events-auto">
+            <p className="text-blue-500 font-black text-[10px] tracking-widest uppercase mb-1">Protocolo Ativo</p>
+            <h2 className="text-3xl font-black italic uppercase mb-6">{user?.nickname}</h2>
+            <button 
+              onClick={() => { 
+                setView(AppState.ACTIVE); 
+                setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation!], fullPath: [], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); 
+              }} 
+              className="w-full bg-blue-600 py-6 rounded-[2.5rem] font-black text-2xl italic uppercase shadow-[0_20px_50px_rgba(37,99,235,0.4)] active:scale-95 transition-all"
+            >
+              INICIAR CONQUISTA
+            </button>
+          </div>
         </div>
       )}
 
-      {view === AppState.ACTIVE && currentActivity && <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />}
+      {view === AppState.ACTIVE && currentActivity && (
+        <div className="z-[1500] relative h-full w-full pointer-events-none">
+          <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />
+        </div>
+      )}
       
       {view === AppState.SUMMARY && (
-        <div className="absolute inset-0 bg-black z-[600] p-8 flex flex-col">
-          <h2 className="text-3xl font-black italic mb-8 pt-12">RELATÓRIO</h2>
-          <div className="bg-white/5 p-6 rounded-3xl border border-white/10 flex-1 mb-8 overflow-y-auto">
-            <p className="text-blue-500 text-xs font-bold mb-2 uppercase">Comando DmN:</p>
-            <p className="text-xl italic font-bold">"{battleReport}"</p>
+        <div className="absolute inset-0 bg-black z-[2000] p-8 flex flex-col">
+          <h2 className="text-4xl font-black italic mb-8 pt-12 tracking-tighter">RELATÓRIO<br/>DE CAMPO</h2>
+          <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 flex-1 mb-8 overflow-y-auto shadow-inner relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-6 opacity-5"><ShieldCheck size={100} /></div>
+            <p className="text-blue-500 text-[10px] font-black mb-4 uppercase tracking-[0.3em]">Comando DmN:</p>
+            <p className="text-2xl italic font-bold leading-tight">"{battleReport}"</p>
           </div>
-          <button onClick={() => setView(AppState.HOME)} className="w-full bg-white text-black py-6 rounded-3xl font-black italic">FINALIZAR</button>
+          <button onClick={() => setView(AppState.HOME)} className="w-full bg-white text-black py-6 rounded-[2.5rem] font-black italic uppercase text-xl shadow-xl active:scale-95 transition-all">FINALIZAR PROTOCOLO</button>
         </div>
       )}
     </div>

@@ -34,11 +34,12 @@ const GameMap: React.FC<GameMapProps> = ({
         maxZoom: 22, className: 'map-tiles'
       }).addTo(mapRef.current);
 
+      // Usando Canvas dedicado para performance e controle de opacidade
       territoryCanvasRef.current = L.canvas({ padding: 0.5, className: 'territory-layer' }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 5, opacity: 0.8, lineCap: 'round'
+        color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round'
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
@@ -53,7 +54,7 @@ const GameMap: React.FC<GameMapProps> = ({
       const [lat, lng] = cell.id.split('_').map(parseFloat);
       L.circle([lat, lng], {
         radius: 12, renderer: territoryCanvasRef.current!, stroke: false, 
-        fillColor: color, fillOpacity: 1.0 // Sólido no canvas, opacidade controlada via CSS
+        fillColor: color, fillOpacity: 1.0 // Sólido aqui para que a opacidade global de 60% seja controlada pelo CSS da camada
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells]);
@@ -65,17 +66,17 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker([lat, lng], {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center shadow-lg"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div>`,
-            iconSize: [16, 16], iconAnchor: [8, 8]
+            html: `<div class="relative w-5 h-5 flex items-center justify-center"><div class="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-xl"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div></div>`,
+            iconSize: [20, 20], iconAnchor: [10, 10]
           })
         }).addTo(mapRef.current!);
       } else {
         playerMarkersRef.current[uId].setLatLng([lat, lng]);
       }
-      if (uId === activeUserId) mapRef.current?.panTo([lat, lng]);
+      if (uId === activeUserId) mapRef.current?.panTo([lat, lng], { animate: true });
     };
     if (userLocation && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser.color);
-  }, [users, userLocation]);
+  }, [users, userLocation, activeUser]);
 
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
@@ -88,14 +89,16 @@ const GameMap: React.FC<GameMapProps> = ({
     <>
       <style>{`
         .territory-layer { 
-          opacity: 0.6 !important; /* OPACIDADE FIXA EM 60% */
-          filter: blur(6px); /* Efeito suave sem estourar a cor */
+          opacity: 0.6 !important; /* OPACIDADE EM 60% REAIS */
+          filter: blur(4px);
           pointer-events: none;
+          z-index: 400;
         }
-        .map-tiles { opacity: 0.4; filter: invert(100%) brightness(0.5); }
-        .leaflet-container { background: #000 !important; }
+        .map-tiles { opacity: 0.35; filter: invert(100%) brightness(0.6) saturate(0.2); }
+        .leaflet-container { background: #080808 !important; }
+        .player-marker { z-index: 1000 !important; }
       `}</style>
-      <div id={mapId} className="h-full w-full" />
+      <div id={mapId} className="h-full w-full outline-none" />
     </>
   );
 };
