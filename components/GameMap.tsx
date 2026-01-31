@@ -23,6 +23,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const territoryCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
+  const targetMarkerRef = useRef<L.Marker | null>(null);
   
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => {
@@ -61,6 +62,26 @@ const GameMap: React.FC<GameMapProps> = ({
       mapRef.current.on('click', (e) => {
         if (onMapClickRef.current) {
           onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+          
+          // Efeito visual de Alvo no Mapa
+          if (targetMarkerRef.current) targetMarkerRef.current.remove();
+          targetMarkerRef.current = L.marker(e.latlng, {
+            icon: L.divIcon({
+              className: 'target-marker',
+              html: `<div class="relative w-10 h-10 flex items-center justify-center">
+                      <div class="absolute inset-0 border-2 border-orange-500 rounded-full animate-ping opacity-30"></div>
+                      <div class="w-2 h-2 bg-orange-500 rounded-full shadow-[0_0_10px_#f97316]"></div>
+                    </div>`,
+              iconSize: [40, 40], iconAnchor: [20, 20]
+            })
+          }).addTo(mapRef.current!);
+          
+          setTimeout(() => {
+            if (targetMarkerRef.current) {
+              targetMarkerRef.current.remove();
+              targetMarkerRef.current = null;
+            }
+          }, 2000);
         }
       });
     }
@@ -70,11 +91,8 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Atualiza/Cria marcadores para usuários ativos
-    // Fix: Explicitly typing the callback parameter to prevent TypeScript from inferring 'u' as 'unknown'
     Object.values(users).forEach((u: User) => {
       if (!u.lat || !u.lng) return;
-      
       if (!playerMarkersRef.current[u.id]) {
         playerMarkersRef.current[u.id] = L.marker([u.lat, u.lng], {
           icon: L.divIcon({
@@ -93,7 +111,6 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     });
 
-    // Remove marcadores de quem sumiu do radar (estale)
     Object.keys(playerMarkersRef.current).forEach((id) => {
       if (!users[id] && id !== activeUserId) {
         playerMarkersRef.current[id].remove();
@@ -101,30 +118,22 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     });
 
-    // Centraliza no usuário ativo
     if (userLocation) {
       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true });
     }
-
   }, [users, userLocation, activeUserId]);
 
   // Renderização das Células
   useEffect(() => {
     if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
-    
-    // Fix: Explicitly typing the callback parameter to prevent TypeScript from inferring 'cell' as 'unknown'
     Object.values(cells).forEach((cell: Cell) => {
       const isHostile = cell.ownerId !== activeUserId && cell.ownerId !== null;
       const color = isHostile ? '#EF4444' : (cell.ownerColor || '#3B82F6');
       const [lat, lng] = cell.id.split('_').map(parseFloat);
-      
       L.circle([lat, lng], {
-        radius: 22,
-        renderer: territoryCanvasRef.current!, 
-        stroke: false, 
-        fillColor: color, 
-        fillOpacity: 1.0 
+        radius: 22, renderer: territoryCanvasRef.current!, 
+        stroke: false, fillColor: color, fillOpacity: 1.0 
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, activeUserId]);
@@ -149,19 +158,10 @@ const GameMap: React.FC<GameMapProps> = ({
           opacity: 0.85;
           animation: territoryBreath 8s ease-in-out infinite;
         }
-        .map-tiles { 
-          opacity: 0.25; 
-          filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1); 
-        }
-        .player-marker { 
-          transition: all 0.5s ease-out; 
-          z-index: 1000 !important; 
-          filter: none !important;
-        }
-        @keyframes territoryBreath {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.01); }
-        }
+        .map-tiles { opacity: 0.25; filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1); }
+        .player-marker { transition: all 0.5s ease-out; z-index: 1000 !important; filter: none !important; }
+        .target-marker { z-index: 2000 !important; filter: none !important; pointer-events: none; }
+        @keyframes territoryBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.01); } }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full outline-none" />
     </>
