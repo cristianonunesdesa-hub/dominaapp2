@@ -6,6 +6,7 @@ import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
 import Leaderboard from './components/Leaderboard';
+import MissionSummary from './components/MissionSummary';
 import { Radio, Zap, ShieldCheck, Target, Globe, Activity as ActivityIcon, Bell } from 'lucide-react';
 import { generateBattleReport } from './services/gemini';
 import { playVictorySound } from './utils/audio';
@@ -16,7 +17,6 @@ const App: React.FC = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  // Type globalUsers as Record<string, User> to avoid 'unknown' issues in Object.values
   const [globalUsers, setGlobalUsers] = useState<Record<string, User>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
@@ -134,7 +134,6 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* MODO DE TESTE - SEMPRE ACESSÍVEL */}
       <button 
         onClick={() => setIsTestMode(!isTestMode)} 
         className={`absolute top-16 right-6 z-[2500] p-4 rounded-2xl border transition-all shadow-2xl active:scale-90 ${isTestMode ? 'bg-orange-600 border-white animate-pulse' : 'bg-black/60 border-white/10 text-white/40'}`}
@@ -146,7 +145,7 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8">
            <Radio size={48} className="text-blue-600 mb-6 animate-pulse" />
            <h1 className="text-5xl font-black italic mb-10 tracking-tighter uppercase">DmN</h1>
-           <div className="w-full max-xs space-y-4">
+           <div className="w-full max-w-xs space-y-4">
               <input type="text" placeholder="CODENAME" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
               <input type="password" placeholder="CHAVE" className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
               {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center mt-2">{loginError}</p>}
@@ -160,7 +159,6 @@ const App: React.FC = () => {
 
       {view === AppState.HOME && user && (
         <div className="absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-6 pointer-events-none">
-          {/* HEADER DE STATUS (QG) */}
           <div className="flex justify-between items-start mb-4 pointer-events-auto bg-black/40 backdrop-blur-md p-4 rounded-3xl border border-white/10">
             <div className="flex gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gray-900 border border-white/10 overflow-hidden">
@@ -181,19 +179,13 @@ const App: React.FC = () => {
             </button>
           </div>
 
-          {/* INTEL FEED (CONCORRENTE VIBES) */}
           <div className="mb-6 space-y-2 pointer-events-auto">
             <div className="bg-blue-600/10 border-l-4 border-blue-600 p-3 rounded-r-xl flex items-center gap-3 animate-in slide-in-from-left duration-700">
                <Bell size={14} className="text-blue-500" />
                <p className="text-[10px] font-bold uppercase tracking-tight text-blue-200">Setor vizinho neutralizado por <span className="text-white">Agente_Null</span></p>
             </div>
-            <div className="bg-white/5 border-l-4 border-white/20 p-3 rounded-r-xl flex items-center gap-3 opacity-60">
-               <Target size={14} />
-               <p className="text-[10px] font-bold uppercase tracking-tight">3 zonas neutras detectadas a 200m</p>
-            </div>
           </div>
 
-          {/* BOTÃO START */}
           <div className="pointer-events-auto relative">
             <div className="absolute -inset-4 bg-blue-600/20 blur-3xl rounded-full animate-pulse"></div>
             <button 
@@ -206,18 +198,11 @@ const App: React.FC = () => {
               <ActivityIcon size={28} /> INICIAR CONQUISTA
             </button>
           </div>
-          
-          <div className="mt-6 flex justify-around opacity-30 pointer-events-auto pb-4">
-             <div className="flex flex-col items-center gap-1"><ShieldCheck size={20} /><span className="text-[8px] font-black uppercase">Segurança</span></div>
-             <div className="flex flex-col items-center gap-1"><Target size={20} /><span className="text-[8px] font-black uppercase">Objetivos</span></div>
-             <div className="flex flex-col items-center gap-1"><Globe size={20} /><span className="text-[8px] font-black uppercase">Rede</span></div>
-          </div>
         </div>
       )}
 
       {view === AppState.LEADERBOARD && (
         <Leaderboard 
-          // Cast 'u' as 'User' to ensure properties like id, nickname, etc. are recognized by TypeScript
           entries={Object.values(globalUsers).map((u: User) => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2 || 0, level: u.level || 1, color: u.color }))}
           currentUserId={user?.id || ''}
           onBack={() => setView(AppState.HOME)}
@@ -230,16 +215,13 @@ const App: React.FC = () => {
         </div>
       )}
       
-      {view === AppState.SUMMARY && (
-        <div className="absolute inset-0 bg-black z-[3000] p-10 flex flex-col">
-          <h2 className="text-5xl font-black italic mb-10 pt-16 tracking-tighter leading-none">SUMÁRIO DE<br/>OPERATIVO</h2>
-          <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 flex-1 mb-10 overflow-y-auto shadow-inner relative">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><ShieldCheck size={120} /></div>
-            <p className="text-blue-500 text-[10px] font-black mb-4 uppercase tracking-[0.4em]">Canal Seguro DmN:</p>
-            <p className="text-2xl italic font-bold leading-snug">"{battleReport}"</p>
-          </div>
-          <button onClick={() => setView(AppState.HOME)} className="w-full bg-white text-black py-7 rounded-[2.5rem] font-black italic uppercase text-xl shadow-2xl active:scale-95 transition-all">RETORNAR AO QG</button>
-        </div>
+      {view === AppState.SUMMARY && currentActivity && user && (
+        <MissionSummary 
+          activity={currentActivity} 
+          user={user} 
+          battleReport={battleReport} 
+          onFinish={() => setView(AppState.HOME)} 
+        />
       )}
     </div>
   );
