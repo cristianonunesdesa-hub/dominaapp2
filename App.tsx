@@ -1,13 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { TACTICAL_COLORS } from './constants';
+import { TACTICAL_COLORS, CELL_AREA_M2 } from './constants';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
-import { generateBattleReport } from './services/gemini';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio, Zap, MapPin, ChevronRight, Share2, Target } from 'lucide-react';
+import { Radio, Zap, ChevronRight, Share2, Target, ShieldCheck } from 'lucide-react';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -29,11 +28,19 @@ const App: React.FC = () => {
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
   const [battleReport, setBattleReport] = useState<string>('');
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  const generateLocalReport = (activity: Activity) => {
+    const area = activity.capturedCellIds.size * CELL_AREA_M2;
+    const km = (activity.distanceMeters / 1000).toFixed(2);
+    
+    if (area > 5000) return `Domínio massivo detectado. Perímetro de ${area}m² integrado à rede. Agente operou em nível Alpha.`;
+    if (area > 1000) return `Expansão tática concluída. ${km}km percorridos com sucesso. Setores sincronizados.`;
+    return `Patrulha de rotina finalizada. Dados de rede atualizados. Continue expandindo o sinal.`;
+  };
 
   const syncGlobalState = async (newCapturedCells: Cell[] = []) => {
     if (!user) return;
@@ -113,7 +120,13 @@ const App: React.FC = () => {
                   syncGlobalState(syncCells); 
                   setShowConfetti(true);
                   setTimeout(() => setShowConfetti(false), 3000);
-                  setCurrentActivity({ ...currentActivity, points: [userLocation], fullPath: newFullPath, distanceMeters: currentActivity.distanceMeters + d });
+                  // RESET DA TRILHA ATIVA (CICLO FECHADO)
+                  setCurrentActivity({ 
+                    ...currentActivity, 
+                    points: [userLocation], // Reinicia o laço
+                    fullPath: newFullPath, 
+                    distanceMeters: currentActivity.distanceMeters + d 
+                  });
                   return;
                 }
               }
@@ -125,20 +138,13 @@ const App: React.FC = () => {
     }
   }, [userLocation, view, isTestMode]);
 
-  const stopActivity = async () => {
+  const stopActivity = () => {
     if (!currentActivity) return;
-    setIsGeneratingReport(true);
-    setView(AppState.SUMMARY);
     const finalActivity = { ...currentActivity, endTime: Date.now() };
+    setBattleReport(generateLocalReport(finalActivity));
     setCurrentActivity(finalActivity);
-    
-    // Sincronização final
-    await syncGlobalState();
-    
-    // Relatório IA
-    const report = await generateBattleReport(finalActivity, user?.nickname || 'Agente');
-    setBattleReport(report);
-    setIsGeneratingReport(false);
+    setView(AppState.SUMMARY);
+    syncGlobalState();
   };
 
   const handleAuth = async (action: 'login' | 'register') => {
@@ -161,7 +167,6 @@ const App: React.FC = () => {
     <div className="relative h-full w-full bg-black overflow-hidden font-sans text-white">
       {showConfetti && <ConfettiEffect />}
       
-      {/* Botão de Modo Teste */}
       <button onClick={() => setIsTestMode(!isTestMode)} className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[22px] border shadow-2xl transition-all ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/60 border-white/10 text-white/40'}`}>
         <Zap size={22} className={isTestMode ? 'fill-white' : ''} />
       </button>
@@ -221,8 +226,8 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-black z-[700] flex flex-col p-8 overflow-y-auto">
           <div className="pt-12 mb-10 flex justify-between items-start">
             <div>
-              <h2 className="text-4xl font-black italic uppercase tracking-tighter leading-none">Missão<br/>Concluída</h2>
-              <p className="text-blue-500 font-black uppercase text-[10px] tracking-widest mt-2">Relatório de Operação de Campo</p>
+              <h2 className="text-4xl font-black italic uppercase tracking-tighter leading-none">Sumário de<br/>Operação</h2>
+              <p className="text-blue-500 font-black uppercase text-[10px] tracking-widest mt-2">Dados de Campo Sincronizados</p>
             </div>
             <div className="bg-white/5 p-4 rounded-2xl border border-white/10"><Share2 size={24} /></div>
           </div>
@@ -238,14 +243,10 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-blue-600/10 border border-blue-500/20 p-8 rounded-[40px] mb-12 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-6 opacity-10"><Target size={80} /></div>
-             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Análise Tática (IA)</p>
-             {isGeneratingReport ? (
-               <div className="flex items-center gap-3"><div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div><span className="text-xs font-bold uppercase animate-pulse">Descriptografando dados...</span></div>
-             ) : (
-               <p className="text-lg font-bold italic leading-tight text-white/90">"{battleReport}"</p>
-             )}
+          <div className="bg-white/5 border border-white/10 p-8 rounded-[40px] mb-12 relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-6 opacity-10"><ShieldCheck size={80} /></div>
+             <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-4">Relatório do Comando</p>
+             <p className="text-xl font-bold italic leading-tight text-white/90">"{battleReport}"</p>
           </div>
 
           <button onClick={() => setView(AppState.HOME)} className="w-full bg-white text-black py-6 rounded-[32px] font-black uppercase text-xl italic mt-auto flex items-center justify-center gap-2">FECHAR RELATÓRIO <ChevronRight size={24} /></button>
