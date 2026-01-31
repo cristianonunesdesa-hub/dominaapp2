@@ -158,7 +158,6 @@ const App: React.FC = () => {
                 playVictorySound();
                 setTimeout(() => setShowConfetti(false), 2000);
                 
-                // Reinicia apenas a trilha "quente" (points), mas mantém o histórico (fullPath)
                 setCurrentActivity(prev => prev ? { 
                   ...prev, 
                   points: [loc], 
@@ -254,33 +253,29 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
-
-        {isTestMode && simTarget && (
-           <div className="bg-orange-600/10 backdrop-blur-xl border border-orange-500/30 p-3 rounded-xl flex items-center justify-between animate-in slide-in-from-top duration-300 shadow-2xl">
-              <div className="flex items-center gap-2">
-                <Navigation size={12} className="text-orange-500 animate-pulse" />
-                <span className="text-[8px] font-black uppercase tracking-widest text-orange-200">INTERPOLAÇÃO TÁTICA ATIVA...</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black italic text-white">{simSpeed} KM/H</span>
-                <button onClick={() => setSimTarget(null)} className="pointer-events-auto p-1 hover:bg-white/10 rounded-md">
-                   <Crosshair size={10} className="text-white/40" />
-                </button>
-              </div>
-           </div>
-        )}
       </div>
 
       {view === AppState.LOGIN && (
-        <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8">
-           <Radio size={40} className="text-blue-600 mb-4 animate-pulse" />
-           <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase leading-none">DOMINA</h1>
-           <div className="w-full max-w-xs space-y-3">
+        <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8 overflow-hidden">
+           {/* IMAGEM DE FUNDO TÁTICA */}
+           <div 
+             className="absolute inset-0 z-[-1] opacity-40 blur-[4px] grayscale-[0.3] brightness-[0.4]"
+             style={{ 
+               backgroundImage: 'url("https://images.unsplash.com/photo-1517466787929-bc90951d0974?q=80&w=2000")', 
+               backgroundSize: 'cover', 
+               backgroundPosition: 'center',
+               transform: 'scale(1.1)' 
+             }}
+           ></div>
+           
+           <Radio size={40} className="text-blue-600 mb-4 animate-pulse relative z-10" />
+           <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase leading-none relative z-10">DOMINA</h1>
+           <div className="w-full max-w-xs space-y-3 relative z-10">
               <div className="relative">
                 <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                <input type="text" placeholder="CODINOME" className="w-full bg-white/5 border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+                <input type="text" placeholder="CODINOME" className="w-full bg-black/40 backdrop-blur-md border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
               </div>
-              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/5 border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
               {loginError && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-bounce">{loginError}</p>}
               <div className="flex gap-2 w-full pt-2">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-black italic uppercase text-xs">LOGIN</button>
