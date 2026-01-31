@@ -15,26 +15,18 @@ interface GameMapProps {
   showLoopPreview?: boolean;
   originalStartPoint?: Point;
   onMapClick?: (lat: number, lng: number) => void;
-  targetLocation?: Point | null;
-  plannedRoute?: Point[];
 }
 
 const GameMap: React.FC<GameMapProps> = ({ 
   userLocation, cells, users, activeUserId, activeUser, currentPath, activeTrail = [],
-  showLoopPreview, originalStartPoint, onMapClick, targetLocation, plannedRoute
+  showLoopPreview, originalStartPoint, onMapClick
 }) => {
   const mapRef = useRef<L.Map | null>(null);
-  const pathLayerRef = useRef<L.Polyline | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
-  const plannedRouteLayerRef = useRef<L.Polyline | null>(null);
-  const previewPolygonRef = useRef<L.Polygon | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
-  const targetMarkerRef = useRef<L.CircleMarker | null>(null);
   const mapId = 'domina-tactical-map';
-  
-  const [zoomLevel, setZoomLevel] = useState(18);
 
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
@@ -47,11 +39,8 @@ const GameMap: React.FC<GameMapProps> = ({
       mapRef.current = L.map(mapId, {
         zoomControl: false,
         attributionControl: false,
-        fadeAnimation: true,
-        inertia: true,
-        tap: false,
         preferCanvas: true
-      }).setView([initialLat, initialLng], 18);
+      }).setView([initialLat, initialLng], 17);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 22,
@@ -59,33 +48,23 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Renderer exclusivo para territórios com filtros de fusão visual
+      // Renderer para o efeito "Liquid"
       canvasLayerRef.current = L.canvas({ 
-        padding: 0.2,
-        className: 'territory-blob-renderer' 
+        padding: 0.5,
+        className: 'territory-liquid-layer' 
       }).addTo(mapRef.current);
 
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
-      
-      previewPolygonRef.current = L.polygon([], {
-        fillColor: 'white', fillOpacity: 0.1, weight: 1, color: 'white', dashArray: '4, 4', renderer: canvasLayerRef.current, interactive: false
-      }).addTo(mapRef.current);
-
-      pathLayerRef.current = L.polyline([], {
-        color: 'rgba(255, 255, 255, 0.1)', weight: 2, opacity: 0.2, renderer: canvasLayerRef.current, interactive: false
-      }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 8, opacity: 0.9, renderer: canvasLayerRef.current, interactive: false
-      }).addTo(mapRef.current);
-
-      plannedRouteLayerRef.current = L.polyline([], {
-        color: '#3B82F6', weight: 4, opacity: 0.6, dashArray: '8, 12', interactive: false
+        color: activeUser?.color || '#FFFFFF', 
+        weight: 6, 
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round'
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => { if (onMapClickRef.current) onMapClickRef.current(e.latlng.lat, e.latlng.lng); });
-      mapRef.current.on('zoomend', () => { if (mapRef.current) setZoomLevel(mapRef.current.getZoom()); });
-      setTimeout(() => mapRef.current?.invalidateSize(), 100);
     }
   }, []);
 
@@ -93,45 +72,31 @@ const GameMap: React.FC<GameMapProps> = ({
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
-    const cellsArray = Object.values(cells);
-
-    cellsArray.forEach((cell: any) => {
+    // Renderizamos cada célula como um círculo grande o suficiente para fundir com os vizinhos
+    // Fix: Cast Object.values to Cell[] to ensure TypeScript correctly identifies properties on the 'cell' object
+    (Object.values(cells) as Cell[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
-      const isMe = cell.ownerId === activeUserId;
+      
+      const [latStr, lngStr] = cell.id.split('_');
+      const centerLat = parseFloat(latStr);
+      const centerLng = parseFloat(lngStr);
 
-      const b = getCellBounds(cell.id);
-      
-      // Aumentamos o tamanho visual das células em 15% (overlap tático) para fechar qualquer gap quadriculado
-      const overlapFactor = 0.00001; 
-      const leafletBounds: L.LatLngExpression[] = [
-        [b[0] - overlapFactor, b[1] - overlapFactor], 
-        [b[2] + overlapFactor, b[1] - overlapFactor], 
-        [b[2] + overlapFactor, b[3] + overlapFactor], 
-        [b[0] - overlapFactor, b[3] + overlapFactor]
-      ];
-      
-      L.polygon(leafletBounds, {
+      // Usamos círculos em vez de polígonos. 
+      // O raio é ligeiramente maior que a distância entre células para garantir sobreposição total.
+      L.circle([centerLat, centerLng], {
+        radius: 8, // Metros (suficiente para cobrir a GRID_SIZE de 0.00006)
         renderer: canvasLayerRef.current,
-        stroke: false, 
+        stroke: false,
         fillColor: ownerColor,
-        // Opacidade maior no centro para garantir que a fusão por blur não apague a cor
-        fillOpacity: cell.ownerId ? (isMe ? 0.7 : 0.5) : 0.05,
+        fillOpacity: 1, // Opacidade total para o filtro contrast trabalhar
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
-  }, [cells, users, zoomLevel, activeUserId]);
+  }, [cells, users]);
 
   useEffect(() => {
     if (!mapRef.current) return;
-
-    Object.keys(playerMarkersRef.current).forEach(id => {
-      if (!users[id] && id !== activeUserId) { 
-        playerMarkersRef.current[id].remove(); 
-        delete playerMarkersRef.current[id]; 
-      }
-    });
-
     const updateMarker = (uId: string, lat: number, lng: number, uData: Partial<User>) => {
       const pos: L.LatLngExpression = [lat, lng];
       const isMe = uId === activeUserId;
@@ -142,14 +107,7 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker(pos, {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `
-              <div class="relative">
-                ${isMe ? `<div class="absolute -inset-6 rounded-full animate-ping" style="background-color: ${color}44"></div>` : ''}
-                <div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-[0_0_20px_rgba(0,0,0,1)] flex items-center justify-center overflow-hidden" style="border-color: ${color}">
-                  <img src="${avatar}" class="w-full h-full object-cover" />
-                </div>
-              </div>
-            `,
+            html: `<div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-2xl flex items-center justify-center overflow-hidden" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover" /></div>`,
             iconSize: [40, 40], iconAnchor: [20, 20]
           }),
           zIndexOffset: isMe ? 1000 : 900
@@ -157,22 +115,13 @@ const GameMap: React.FC<GameMapProps> = ({
       } else {
         playerMarkersRef.current[uId].setLatLng(pos);
       }
-
       if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.1 });
     };
 
-    (Object.values(users) as User[]).forEach(u => {
-      if (u.id === activeUserId || !u.lat || !u.lng) return;
-      updateMarker(u.id, u.lat, u.lng, u);
-    });
-
-    if (userLocation && activeUserId && activeUser) {
-      updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
-    }
+    (Object.values(users) as User[]).forEach(u => { if (u.id !== activeUserId && u.lat && u.lng) updateMarker(u.id, u.lat, u.lng, u); });
+    if (userLocation && activeUserId && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
   }, [users, activeUserId, userLocation, activeUser]);
 
-  useEffect(() => { if (pathLayerRef.current) pathLayerRef.current.setLatLngs(currentPath.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [currentPath]);
-  
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
       activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple));
@@ -183,21 +132,20 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        .leaflet-container { cursor: crosshair !important; background: #000 !important; }
+        .leaflet-container { background: #0b0d11 !important; }
         
-        /* Efeito de Fusão Orgânica (Liquid Territory) */
-        /* O blur alto seguido de contraste alto funde os quadrados em uma mancha única sem frestas */
-        .territory-blob-renderer {
-          filter: blur(5px) contrast(180%) brightness(1.1);
+        /* O SEGREDO DA SUAVIDADE: Efeito Metaball */
+        /* Blur funde as cores, Contrast endurece as bordas, Opacity traz a transparência do app de referência */
+        .territory-liquid-layer {
+          filter: blur(12px) contrast(350%) brightness(1.1);
+          opacity: 0.6;
           mix-blend-mode: screen;
           pointer-events: none !important;
-          opacity: 0.85;
         }
 
-        .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
-        @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
+        .player-marker { transition: transform 0.2s linear; }
       `}</style>
-      <div id={mapId} className="h-full w-full outline-none" style={{ minHeight: '100%' }} />
+      <div id={mapId} className="h-full w-full outline-none" />
     </>
   );
 };

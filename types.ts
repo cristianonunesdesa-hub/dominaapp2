@@ -2,7 +2,7 @@
 export interface User {
   id: string;
   nickname: string;
-  password?: string; // Armazenada localmente para o MVP
+  password?: string;
   color: string;
   avatarUrl?: string;
   cellsOwned: number;
@@ -11,15 +11,15 @@ export interface User {
   level: number;
   badges: string[];
   dailyStreak: number;
-  // Added to support real-time map positions
   lat?: number;
   lng?: number;
 }
 
 export interface Cell {
-  id: string; // "lat_lng" key
+  id: string;
   ownerId: string | null;
   ownerNickname?: string;
+  ownerColor?: string;
   bounds: [number, number, number, number];
   updatedAt: number;
   defense: number;
@@ -47,6 +47,7 @@ export interface Activity {
 
 export enum AppState {
   LOGIN = 'LOGIN',
+  TUTORIAL = 'TUTORIAL',
   HOME = 'HOME',
   ACTIVE = 'ACTIVE',
   SUMMARY = 'SUMMARY',
