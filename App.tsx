@@ -6,7 +6,7 @@ import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './util
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio } from 'lucide-react';
+import { Radio, Settings, Zap } from 'lucide-react';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(false);
   
   const [user, setUser] = useState<User | null>(null);
   const [globalUsers, setGlobalUsers] = useState<Record<string, any>>({});
@@ -66,22 +67,29 @@ const App: React.FC = () => {
   }, [user?.id, view]);
 
   useEffect(() => {
+    if (isTestMode) return; // Pausa GPS real se o modo teste estiver ON
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() }),
       null,
       { enableHighAccuracy: true }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [isTestMode]);
+
+  const handleMapClick = (lat: number, lng: number) => {
+    if (isTestMode) {
+      const newPoint = { lat, lng, timestamp: Date.now() };
+      setUserLocation(newPoint);
+    }
+  };
 
   useEffect(() => {
-    // Lógica de captura desacoplada da renderização de mapa (Gatilhada apenas em movimento real)
     if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
       const points = currentActivity.points;
       const lastPoint = points[points.length - 1];
       if (lastPoint) {
         const d = calculateDistance(lastPoint, userLocation);
-        if (d > 1.2) { // Incremento mínimo para processamento tático
+        if (d > 0.1) { // Reduzido para 0.1m no modo teste para capturas precisas por clique
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
           
@@ -151,6 +159,22 @@ const App: React.FC = () => {
     <div className="relative h-full w-full bg-black overflow-hidden font-sans">
       {showConfetti && <ConfettiEffect />}
       
+      {/* Indicador de Modo Teste */}
+      {isTestMode && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600 px-4 py-1 rounded-full flex items-center gap-2 shadow-2xl border border-white/20 animate-pulse">
+           <Zap size={12} className="fill-white" />
+           <span className="text-[10px] font-black uppercase tracking-widest">Modo Simulação Ativo</span>
+        </div>
+      )}
+
+      {/* Botão de Toggle do Modo Teste */}
+      <button 
+        onClick={() => setIsTestMode(!isTestMode)}
+        className={`absolute top-12 right-6 z-[1000] p-3 rounded-2xl border transition-all ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/50 border-white/10'}`}
+      >
+        <Settings size={20} className={isTestMode ? 'text-white' : 'text-white/40'} />
+      </button>
+
       <div className="absolute inset-0 z-0">
         <GameMap 
           userLocation={userLocation} 
@@ -159,7 +183,8 @@ const App: React.FC = () => {
           activeUserId={user?.id || ''} 
           activeUser={user}
           currentPath={currentActivity?.fullPath || []} 
-          activeTrail={currentActivity?.points || []} 
+          activeTrail={currentActivity?.points || []}
+          onMapClick={handleMapClick}
         />
       </div>
 
