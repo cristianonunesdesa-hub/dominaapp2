@@ -59,7 +59,12 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      canvasLayerRef.current = L.canvas({ padding: 0.1 }).addTo(mapRef.current);
+      // Criamos um renderer específico para o território com uma classe para aplicar filtros CSS
+      canvasLayerRef.current = L.canvas({ 
+        padding: 0.1,
+        className: 'territory-canvas-renderer' 
+      }).addTo(mapRef.current);
+
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
       
       previewPolygonRef.current = L.polygon([], {
@@ -94,16 +99,21 @@ const GameMap: React.FC<GameMapProps> = ({
       const isMe = cell.ownerId === activeUserId;
 
       const b = getCellBounds(cell.id);
-      const leafletBounds: L.LatLngExpression[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+      
+      // Aumentamos os limites em 1% para garantir sobreposição e remover linhas de grid sub-pixel
+      const padding = 0.0000005; 
+      const leafletBounds: L.LatLngExpression[] = [
+        [b[0] - padding, b[1] - padding], 
+        [b[2] + padding, b[1] - padding], 
+        [b[2] + padding, b[3] + padding], 
+        [b[0] - padding, b[3] + padding]
+      ];
       
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
-        stroke: true,
-        weight: isMe ? 2 : 1.2, // Borda mais grossa para o meu território
-        color: ownerColor,
-        opacity: isMe ? 0.6 : 0.4, // Mais opaco nas bordas se for meu
+        stroke: false, // REMOVIDO: Sem bordas para evitar o visual quadriculado
         fillColor: ownerColor,
-        fillOpacity: cell.ownerId ? (isMe ? 0.55 : 0.4) : 0.1,
+        fillOpacity: cell.ownerId ? (isMe ? 0.6 : 0.45) : 0.1,
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
@@ -171,6 +181,14 @@ const GameMap: React.FC<GameMapProps> = ({
     <>
       <style>{`
         .leaflet-container { cursor: crosshair !important; background: #000 !important; }
+        
+        /* Efeito de fusão tática para o território */
+        .territory-canvas-renderer {
+          filter: blur(2px) contrast(1.2);
+          transition: filter 0.3s ease;
+          pointer-events: none !important;
+        }
+
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
         @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
       `}</style>
