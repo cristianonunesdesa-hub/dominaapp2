@@ -59,10 +59,10 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Criamos um renderer específico para o território com uma classe para aplicar filtros CSS
+      // Renderer exclusivo para territórios com filtros de fusão visual
       canvasLayerRef.current = L.canvas({ 
-        padding: 0.1,
-        className: 'territory-canvas-renderer' 
+        padding: 0.2,
+        className: 'territory-blob-renderer' 
       }).addTo(mapRef.current);
 
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
@@ -76,7 +76,7 @@ const GameMap: React.FC<GameMapProps> = ({
       }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, renderer: canvasLayerRef.current, interactive: false
+        color: activeUser?.color || '#FFFFFF', weight: 8, opacity: 0.9, renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
 
       plannedRouteLayerRef.current = L.polyline([], {
@@ -93,27 +93,30 @@ const GameMap: React.FC<GameMapProps> = ({
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
-    (Object.values(cells) as any[]).forEach((cell) => {
+    const cellsArray = Object.values(cells);
+
+    cellsArray.forEach((cell: any) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
       const isMe = cell.ownerId === activeUserId;
 
       const b = getCellBounds(cell.id);
       
-      // Aumentamos os limites em 1% para garantir sobreposição e remover linhas de grid sub-pixel
-      const padding = 0.0000005; 
+      // Aumentamos o tamanho visual das células em 15% (overlap tático) para fechar qualquer gap quadriculado
+      const overlapFactor = 0.00001; 
       const leafletBounds: L.LatLngExpression[] = [
-        [b[0] - padding, b[1] - padding], 
-        [b[2] + padding, b[1] - padding], 
-        [b[2] + padding, b[3] + padding], 
-        [b[0] - padding, b[3] + padding]
+        [b[0] - overlapFactor, b[1] - overlapFactor], 
+        [b[2] + overlapFactor, b[1] - overlapFactor], 
+        [b[2] + overlapFactor, b[3] + overlapFactor], 
+        [b[0] - overlapFactor, b[3] + overlapFactor]
       ];
       
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
-        stroke: false, // REMOVIDO: Sem bordas para evitar o visual quadriculado
+        stroke: false, 
         fillColor: ownerColor,
-        fillOpacity: cell.ownerId ? (isMe ? 0.6 : 0.45) : 0.1,
+        // Opacidade maior no centro para garantir que a fusão por blur não apague a cor
+        fillOpacity: cell.ownerId ? (isMe ? 0.7 : 0.5) : 0.05,
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
@@ -182,11 +185,13 @@ const GameMap: React.FC<GameMapProps> = ({
       <style>{`
         .leaflet-container { cursor: crosshair !important; background: #000 !important; }
         
-        /* Efeito de fusão tática para o território */
-        .territory-canvas-renderer {
-          filter: blur(2px) contrast(1.2);
-          transition: filter 0.3s ease;
+        /* Efeito de Fusão Orgânica (Liquid Territory) */
+        /* O blur alto seguido de contraste alto funde os quadrados em uma mancha única sem frestas */
+        .territory-blob-renderer {
+          filter: blur(5px) contrast(180%) brightness(1.1);
+          mix-blend-mode: screen;
           pointer-events: none !important;
+          opacity: 0.85;
         }
 
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
