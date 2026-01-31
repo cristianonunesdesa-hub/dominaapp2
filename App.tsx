@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { COLORS, CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from './constants';
+import { COLORS, TACTICAL_COLORS, CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from './constants';
 import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './utils';
 import { playVictorySound } from './utils/audio';
 import { generateBattleReport } from './services/gemini';
@@ -14,21 +14,6 @@ import { Trophy, User as UserIcon, Zap, CheckCircle2, Radio, Lock, AlertCircle, 
 
 const CLOSE_LOOP_THRESHOLD_METERS = 35; 
 const LEVEL_XP_STEP = 1000;
-
-const AnimatedNumber: React.FC<{ value: number; duration?: number }> = ({ value, duration = 1200 }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-  useEffect(() => {
-    let startTimestamp: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      setDisplayValue(Math.floor(progress * value));
-      if (progress < 1) window.requestAnimationFrame(step);
-    };
-    window.requestAnimationFrame(step);
-  }, [value, duration]);
-  return <>{displayValue}</>;
-};
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
@@ -53,7 +38,6 @@ const App: React.FC = () => {
 
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loginColor, setLoginColor] = useState(COLORS.PRIMARY);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const syncGlobalState = async (newCapturedCells: Cell[] = []) => {
@@ -77,11 +61,9 @@ const App: React.FC = () => {
         setGlobalUsers(userMap);
       }
       if (data.cells) {
-        // MERGE CRÍTICO: preserva células locais recém conquistadas enquanto o Sync retorna
         setCells(prev => {
           const merged = { ...prev };
           Object.keys(data.cells).forEach(id => {
-            // Se a célula já for minha localmente, não deixo o Sync sobrescrever com dado possivelmente antigo
             if (merged[id]?.ownerId === user.id) return;
             merged[id] = data.cells[id];
           });
@@ -245,11 +227,17 @@ const App: React.FC = () => {
     if (loginNickname.length < 3) return setLoginError("Nickname deve ter 3+ caracteres.");
     if (loginPassword.length < 4) return setLoginError("Senha deve ter 4+ caracteres.");
     setIsSyncing(true);
+    
+    // Escolhe uma cor distinta se for registro
+    const selectedColor = action === 'register' 
+      ? TACTICAL_COLORS[Math.floor(Math.random() * TACTICAL_COLORS.length)] 
+      : COLORS.PRIMARY;
+
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname: loginNickname, password: loginPassword, color: loginColor, action })
+        body: JSON.stringify({ nickname: loginNickname, password: loginPassword, color: selectedColor, action })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro de rede.");
@@ -271,7 +259,7 @@ const App: React.FC = () => {
           <p className="text-[10px] font-black text-blue-400 tracking-[0.4em] mt-3">SISTEMA DE DOMÍNIO TÁTICO</p>
         </div>
         <div className="w-full max-w-xs space-y-4">
-          {loginError && <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-[11px] text-red-200 uppercase font-black flex items-center gap-2 animate-bounce"> <AlertCircle size={14} /> {loginError} </div>}
+          {loginError && <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-[11px] text-red-200 uppercase font-black flex items-center gap-2 animate-bounce"> <AlertCircle size(14) /> {loginError} </div>}
           <div className="space-y-1">
             <input type="text" placeholder="CODINOME AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginNickname} onChange={(e) => setLoginNickname(e.target.value)} />
             <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />

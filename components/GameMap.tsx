@@ -113,7 +113,8 @@ const GameMap: React.FC<GameMapProps> = ({
     territoryGroupRef.current.clearLayers();
     labelGroupRef.current.clearLayers();
 
-    const showIdentity = zoomLevel >= 20;
+    // Mostra identidade em zooms altos para evitar poluição visual
+    const showIdentity = zoomLevel >= 19;
 
     (Object.values(cells) as Cell[]).forEach((cell: Cell) => {
       const owner = users[cell.ownerId || ''];
@@ -132,11 +133,23 @@ const GameMap: React.FC<GameMapProps> = ({
       if (showIdentity && owner) {
         const centerLat = (b[0] + b[2]) / 2;
         const centerLng = (b[1] + b[3]) / 2;
+        
+        // Renderiza Nickname e Avatar dentro da célula
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
-            className: 'cell-identity',
-            html: `<div class="scale-[0.3]"><img src="${owner.avatarUrl}" class="w-6 h-6 rounded-full border border-white/50" /></div>`,
-            iconSize: [20, 20]
+            className: 'cell-identity-label',
+            html: `
+              <div class="flex flex-col items-center justify-center scale-[0.4] origin-center">
+                <div class="w-10 h-10 rounded-full border-2 border-white/50 overflow-hidden shadow-lg bg-black">
+                  <img src="${owner.avatarUrl}" class="w-full h-full object-cover" />
+                </div>
+                <div class="mt-1 px-2 py-0.5 bg-black/60 rounded backdrop-blur-sm border border-white/10 whitespace-nowrap">
+                   <span class="text-[12px] font-black uppercase tracking-tighter text-white">${owner.nickname}</span>
+                </div>
+              </div>
+            `,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
           }),
           interactive: false
         }).addTo(labelGroupRef.current!);
@@ -144,11 +157,9 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells, users, zoomLevel]);
 
-  // Efeito do Marcador de Jogadores - CRÍTICO: Agora depende de userLocation para tempo real
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Remove marcadores de quem saiu do radar
     Object.keys(playerMarkersRef.current).forEach(id => {
       if (!users[id] && id !== activeUserId) { 
         playerMarkersRef.current[id].remove(); 
@@ -156,7 +167,6 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     });
 
-    // Função para atualizar ou criar marcador
     const updateMarker = (uId: string, lat: number, lng: number, uData: Partial<User>) => {
       const pos: L.LatLngExpression = [lat, lng];
       const isMe = uId === activeUserId;
@@ -179,18 +189,16 @@ const GameMap: React.FC<GameMapProps> = ({
       if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.1 });
     };
 
-    // Atualiza outros jogadores vindo do Sync
     (Object.values(users) as User[]).forEach(u => {
       if (u.id === activeUserId || !u.lat || !u.lng) return;
       updateMarker(u.id, u.lat, u.lng, u);
     });
 
-    // ATUALIZAÇÃO LOCAL IMEDIATA DO EU
     if (userLocation && activeUserId) {
       const meData = users[activeUserId] || {};
       updateMarker(activeUserId, userLocation.lat, userLocation.lng, meData);
     }
-  }, [users, activeUserId, userLocation]); // userLocation adicionado aqui!
+  }, [users, activeUserId, userLocation]);
 
   useEffect(() => { if (pathLayerRef.current) pathLayerRef.current.setLatLngs(currentPath.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [currentPath]);
   useEffect(() => { if (activeTrailLayerRef.current) activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [activeTrail]);
@@ -202,6 +210,7 @@ const GameMap: React.FC<GameMapProps> = ({
         .map-tiles { filter: brightness(1.2) contrast(1.1) saturate(0.8); }
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
         @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
+        .cell-identity-label { pointer-events: none !important; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" style={{ minHeight: '100%' }} />
     </>
