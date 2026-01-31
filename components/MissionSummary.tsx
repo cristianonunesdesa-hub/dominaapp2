@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, User } from '../types';
 import { CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from '../constants';
-import { Shield, Zap, Map as MapIcon, Timer, TrendingUp, ChevronRight } from 'lucide-react';
+import { Shield, Zap, Map as MapIcon, Timer, TrendingUp, ChevronRight, Activity as ActivityIcon } from 'lucide-react';
 
 interface MissionSummaryProps {
   activity: Activity;
@@ -12,6 +12,8 @@ interface MissionSummaryProps {
 }
 
 const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, battleReport, onFinish }) => {
+  const [animatedXp, setAnimatedXp] = useState(0);
+  
   const area = activity.capturedCellIds.size * CELL_AREA_M2;
   const km = activity.distanceMeters / 1000;
   const durationMin = Math.floor((Date.now() - activity.startTime) / 60000);
@@ -19,72 +21,133 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, battleR
   
   const xpGained = Math.round((km * XP_PER_KM) + (activity.capturedCellIds.size * XP_PER_SECTOR));
 
+  useEffect(() => {
+    const duration = 1500;
+    const start = 0;
+    const end = xpGained;
+    let startTime: number | null = null;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = timestamp - startTime;
+      const val = Math.min(Math.floor((progress / duration) * end), end);
+      setAnimatedXp(val);
+      if (progress < duration) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [xpGained]);
+
   return (
     <div className="absolute inset-0 bg-black z-[3000] flex flex-col p-6 overflow-y-auto pb-10">
-      {/* Header Estilizado */}
-      <div className="pt-12 mb-8">
+      {/* Scanline / Grid Effect Background Overlay */}
+      <div className="fixed inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 4px, 3px 100%' }}></div>
+
+      {/* Header */}
+      <div className="pt-12 mb-8 relative">
         <div className="flex items-center gap-2 text-blue-500 mb-1">
-          <Shield size={16} />
-          <span className="text-[10px] font-black uppercase tracking-[0.4em]">Debriefing de Operação</span>
+          <ActivityIcon size={14} className="animate-pulse" />
+          <span className="text-[10px] font-black uppercase tracking-[0.4em]">Protocolo de Extração Concluído</span>
         </div>
-        <h2 className="text-5xl font-black italic tracking-tighter uppercase leading-none">Missão<br/>Cumprida</h2>
+        <h2 className="text-6xl font-black italic tracking-tighter uppercase leading-[0.9] text-white">
+          DEBRIEFING<br/><span className="text-blue-600">OPERACIONAL</span>
+        </h2>
       </div>
 
-      {/* Grid de Estatísticas Principais */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <StatCard icon={<MapIcon size={16}/>} label="Área" value={`${area.toLocaleString()}`} unit="m²" color="text-white" />
-        <StatCard icon={<Zap size={16}/>} label="Distância" value={km.toFixed(2)} unit="km" color="text-white" />
-        <StatCard icon={<Timer size={16}/>} label="Tempo" value={durationMin.toString()} unit="min" color="text-white" />
-        <StatCard icon={<TrendingUp size={16}/>} label="Vel. Média" value={avgSpeed} unit="km/h" color="text-white" />
+      {/* Grid de Estatísticas Táticas */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <StatCard 
+          icon={<MapIcon size={18}/>} 
+          label="Área Conquistada" 
+          value={area.toLocaleString()} 
+          unit="m²" 
+          sub="Domínio de Grade"
+        />
+        <StatCard 
+          icon={<Zap size={18}/>} 
+          label="Deslocamento" 
+          value={km.toFixed(2)} 
+          unit="km" 
+          sub="Raio de Incursão"
+        />
+        <StatCard 
+          icon={<Timer size={18}/>} 
+          label="Tempo de Campo" 
+          value={durationMin.toString()} 
+          unit="min" 
+          sub="Ciclo Ativo"
+        />
+        <StatCard 
+          icon={<TrendingUp size={18}/>} 
+          label="Velocidade" 
+          value={avgSpeed} 
+          unit="km/h" 
+          sub="Ritmo Tático"
+        />
       </div>
 
-      {/* Card de XP e Nível */}
-      <div className="bg-blue-600/10 border border-blue-500/30 rounded-[2.5rem] p-6 mb-6">
-        <div className="flex justify-between items-end mb-4">
+      {/* Card de Recompensas de Experiência */}
+      <div className="bg-gradient-to-br from-blue-600/20 to-blue-900/10 border border-blue-500/30 rounded-[2.5rem] p-8 mb-6 relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-full h-1 bg-blue-500/50"></div>
+        <div className="flex justify-between items-start mb-6">
           <div>
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Ganho de Experiência</p>
-            <h3 className="text-3xl font-black italic">+{xpGained} XP</h3>
+            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Dados Sincronizados</p>
+            <h3 className="text-4xl font-black italic text-white">+{animatedXp} <span className="text-xl text-blue-500 opacity-50">XP</span></h3>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Nível Atual</p>
-            <h3 className="text-2xl font-black italic">LVL {user.level}</h3>
+            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-1">
+              <span className="text-lg font-black italic text-blue-400">{user.level}</span>
+            </div>
+            <p className="text-[8px] font-black text-white/30 uppercase tracking-tighter">Ranking</p>
           </div>
         </div>
-        <div className="h-3 w-full bg-white/10 rounded-full overflow-hidden mb-2">
-          <div className="h-full bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]" style={{ width: '75%' }}></div>
+        
+        <div className="space-y-2">
+          <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest mb-1">
+            <span className="text-blue-300">Nível {user.level}</span>
+            <span className="text-white/40">Próximo: {user.level + 1}</span>
+          </div>
+          <div className="h-3 w-full bg-black/40 rounded-full border border-white/5 overflow-hidden p-0.5">
+            <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.6)] transition-all duration-1000" style={{ width: '68%' }}></div>
+          </div>
         </div>
-        <p className="text-[9px] font-bold text-blue-300/50 text-center uppercase tracking-widest">240 XP para o Nível {user.level + 1}</p>
       </div>
 
-      {/* Intel Report (Gemini) */}
-      <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-6 mb-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-6 opacity-5 rotate-12">
-          <Shield size={100} />
+      {/* Relatório de Inteligência Gemini */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-8 mb-8 relative">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-600/20 rounded-lg text-blue-500">
+            <Shield size={16} />
+          </div>
+          <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Criptografia de Rede DmN</p>
         </div>
-        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Intel de Campo Transmitido
-        </p>
-        <p className="text-xl italic font-medium leading-tight text-gray-200">
+        <p className="text-2xl italic font-bold leading-tight text-white/90 font-serif">
           "{battleReport}"
         </p>
+        <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center opacity-40">
+           <span className="text-[8px] font-mono">ID: {activity.id}</span>
+           <span className="text-[8px] font-mono">SIG: OPS-774-ALPHA</span>
+        </div>
       </div>
 
-      {/* Botão de Ação Final */}
+      {/* CTA Final */}
       <button 
         onClick={onFinish}
-        className="mt-auto w-full bg-white text-black py-7 rounded-[2.5rem] font-black italic uppercase text-xl shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3"
+        className="mt-auto w-full bg-white text-black py-8 rounded-[3rem] font-black italic uppercase text-2xl shadow-[0_20px_50px_rgba(255,255,255,0.1)] active:scale-95 active:bg-gray-200 transition-all flex items-center justify-center gap-4 group"
       >
-        SINCRONIZAR E FINALIZAR <ChevronRight size={24} />
+        VOLTAR AO QG <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
       </button>
     </div>
   );
 };
 
-const StatCard = ({ icon, label, value, unit, color }: any) => (
-  <div className="bg-white/5 border border-white/10 p-5 rounded-[2rem] flex flex-col items-center text-center">
-    <div className="text-blue-500 mb-2">{icon}</div>
-    <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">{label}</div>
-    <div className={`text-xl font-black italic ${color}`}>{value}<span className="text-[10px] ml-1 opacity-40 not-italic">{unit}</span></div>
+const StatCard = ({ icon, label, value, unit, sub }: any) => (
+  <div className="bg-white/5 border border-white/10 p-6 rounded-[2.5rem] flex flex-col items-start group hover:bg-white/[0.08] transition-colors">
+    <div className="text-blue-500 mb-4 bg-blue-500/10 p-3 rounded-2xl group-hover:scale-110 transition-transform">{icon}</div>
+    <div className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">{label}</div>
+    <div className="text-2xl font-black italic text-white leading-none">
+      {value}<span className="text-xs ml-1 opacity-40 not-italic font-bold">{unit}</span>
+    </div>
+    <div className="text-[8px] font-bold text-blue-400/40 uppercase mt-2 tracking-tighter">{sub}</div>
   </div>
 );
 
