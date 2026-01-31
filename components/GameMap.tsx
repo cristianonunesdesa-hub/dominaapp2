@@ -9,6 +9,7 @@ interface GameMapProps {
   cells: Record<string, Cell>;
   users: Record<string, User>;
   activeUserId: string;
+  activeUser: User | null; // Adicionado para ter acesso imediato aos dados do jogador local
   currentPath: Point[]; 
   activeTrail?: Point[]; 
   showLoopPreview?: boolean;
@@ -19,7 +20,7 @@ interface GameMapProps {
 }
 
 const GameMap: React.FC<GameMapProps> = ({ 
-  userLocation, cells, users, activeUserId, currentPath, activeTrail = [],
+  userLocation, cells, users, activeUserId, activeUser, currentPath, activeTrail = [],
   showLoopPreview, originalStartPoint, onMapClick, targetLocation, plannedRoute
 }) => {
   const mapRef = useRef<L.Map | null>(null);
@@ -186,19 +187,21 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId].setLatLng(pos);
       }
 
-      if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.1 });
+      // Se for o eu, centraliza instantaneamente ou com duração mínima para acompanhar a "maninhada"
+      if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.05 });
     };
 
+    // Atualiza outros jogadores
     (Object.values(users) as User[]).forEach(u => {
       if (u.id === activeUserId || !u.lat || !u.lng) return;
       updateMarker(u.id, u.lat, u.lng, u);
     });
 
-    if (userLocation && activeUserId) {
-      const meData = users[activeUserId] || {};
-      updateMarker(activeUserId, userLocation.lat, userLocation.lng, meData);
+    // Atualiza o EU com dados locais imediatos para evitar lag visual
+    if (userLocation && activeUserId && activeUser) {
+      updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
     }
-  }, [users, activeUserId, userLocation]);
+  }, [users, activeUserId, userLocation, activeUser]);
 
   useEffect(() => { if (pathLayerRef.current) pathLayerRef.current.setLatLngs(currentPath.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [currentPath]);
   useEffect(() => { if (activeTrailLayerRef.current) activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [activeTrail]);

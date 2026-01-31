@@ -259,7 +259,7 @@ const App: React.FC = () => {
           <p className="text-[10px] font-black text-blue-400 tracking-[0.4em] mt-3">SISTEMA DE DOMÍNIO TÁTICO</p>
         </div>
         <div className="w-full max-w-xs space-y-4">
-          {loginError && <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-[11px] text-red-200 uppercase font-black flex items-center gap-2 animate-bounce"> <AlertCircle size(14) /> {loginError} </div>}
+          {loginError && <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-[11px] text-red-200 uppercase font-black flex items-center gap-2 animate-bounce"> <AlertCircle size={14} /> {loginError} </div>}
           <div className="space-y-1">
             <input type="text" placeholder="CODINOME AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginNickname} onChange={(e) => setLoginNickname(e.target.value)} />
             <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
@@ -279,7 +279,20 @@ const App: React.FC = () => {
       {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers)} currentUserId={user.id} onBack={() => setView(AppState.HOME)} />}
       {view === AppState.PROFILE && <AvatarCustomizer currentAvatar={user.avatarUrl} userColor={user.color} onBack={() => setView(AppState.HOME)} onSave={(url) => { const u = { ...user, avatarUrl: url }; setUser(u); localStorage.setItem('domina_current_session', JSON.stringify(u)); setView(AppState.HOME); }} />}
       <div className={`absolute inset-0 z-0 transition-all duration-700 ${[AppState.SUMMARY, AppState.PROFILE, AppState.LEADERBOARD].includes(view) ? 'opacity-30 blur-sm' : 'opacity-100'}`}>
-        <GameMap userLocation={userLocation} cells={cells} users={globalUsers} activeUserId={user.id} currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []} showLoopPreview={isLoopClosable || isFinishing} originalStartPoint={currentActivity?.fullPath[0]} onMapClick={handleMapClick} targetLocation={targetLocation} plannedRoute={plannedRoute} />
+        <GameMap 
+          userLocation={userLocation} 
+          cells={cells} 
+          users={globalUsers} 
+          activeUserId={user.id} 
+          activeUser={user}
+          currentPath={currentActivity?.fullPath || []} 
+          activeTrail={currentActivity?.points || []} 
+          showLoopPreview={isLoopClosable || isFinishing} 
+          originalStartPoint={currentActivity?.fullPath[0]} 
+          onMapClick={handleMapClick} 
+          targetLocation={targetLocation} 
+          plannedRoute={plannedRoute} 
+        />
       </div>
       <div className="absolute top-12 right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
         <button onClick={() => setIsSimulating(!isSimulating)} className={`p-3 rounded-2xl border flex items-center justify-center transition-all shadow-2xl pointer-events-auto ${isSimulating ? 'bg-blue-600 border-blue-400 text-white' : 'bg-black/60 border-white/10 text-white/40'}`}> <Cpu size={22} /> </button>
