@@ -6,7 +6,7 @@ import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './util
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio, Settings, Zap } from 'lucide-react';
+import { Radio, Settings, Zap, MapPin } from 'lucide-react';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -66,11 +66,19 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [user?.id, view]);
 
+  // Gestão de Localização: GPS Real vs Simulação
   useEffect(() => {
-    if (isTestMode) return; // Pausa GPS real se o modo teste estiver ON
+    if (isTestMode) {
+      // Se entrar em modo teste e não tiver localização, define uma padrão (SP)
+      if (!userLocation) {
+        setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
+      }
+      return; 
+    }
+    
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() }),
-      null,
+      (err) => console.warn("GPS Error:", err),
       { enableHighAccuracy: true }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -89,7 +97,10 @@ const App: React.FC = () => {
       const lastPoint = points[points.length - 1];
       if (lastPoint) {
         const d = calculateDistance(lastPoint, userLocation);
-        if (d > 0.1) { // Reduzido para 0.1m no modo teste para capturas precisas por clique
+        // Sensibilidade aumentada no modo teste (0.1m) para capturar cliques precisos
+        const threshold = isTestMode ? 0.1 : 1.2;
+        
+        if (d > threshold) {
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
           
@@ -107,7 +118,12 @@ const App: React.FC = () => {
                     currentActivity.capturedCellIds.add(id);
                   });
                   syncGlobalState(syncCells); 
-                  setCurrentActivity({ ...currentActivity, points: [...newPoints.slice(0, i + 1), userLocation], fullPath: newFullPath, distanceMeters: currentActivity.distanceMeters + d });
+                  setCurrentActivity({ 
+                    ...currentActivity, 
+                    points: [...newPoints.slice(0, i + 1), userLocation], 
+                    fullPath: newFullPath, 
+                    distanceMeters: currentActivity.distanceMeters + d 
+                  });
                   return;
                 }
               }
@@ -117,7 +133,7 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [userLocation, view]);
+  }, [userLocation, view, isTestMode]);
 
   const handleAuth = async (action: 'login' | 'register') => {
     const selectedColor = getDeterministicColor(loginNickname.toLowerCase());
@@ -136,7 +152,8 @@ const App: React.FC = () => {
   };
 
   const startRun = () => {
-    if (!userLocation) return alert("Buscando satélites...");
+    // No modo teste, permitimos iniciar mesmo sem sinal de GPS real detectado
+    if (!userLocation && !isTestMode) return alert("Buscando satélites...");
     setView(AppState.TUTORIAL);
   };
 
@@ -159,21 +176,23 @@ const App: React.FC = () => {
     <div className="relative h-full w-full bg-black overflow-hidden font-sans">
       {showConfetti && <ConfettiEffect />}
       
-      {/* Indicador de Modo Teste */}
-      {isTestMode && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[1000] bg-orange-600 px-4 py-1 rounded-full flex items-center gap-2 shadow-2xl border border-white/20 animate-pulse">
-           <Zap size={12} className="fill-white" />
-           <span className="text-[10px] font-black uppercase tracking-widest">Modo Simulação Ativo</span>
-        </div>
-      )}
-
-      {/* Botão de Toggle do Modo Teste */}
+      {/* Botão Global de Modo Teste - Posição de Destaque */}
       <button 
         onClick={() => setIsTestMode(!isTestMode)}
-        className={`absolute top-12 right-6 z-[1000] p-3 rounded-2xl border transition-all ${isTestMode ? 'bg-orange-600 border-white' : 'bg-black/50 border-white/10'}`}
+        className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[20px] border shadow-2xl transition-all active:scale-90 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/80 border-white/10 text-white/40'}`}
       >
-        <Settings size={20} className={isTestMode ? 'text-white' : 'text-white/40'} />
+        <Zap size={24} className={isTestMode ? 'fill-white' : ''} />
       </button>
+
+      {/* Banner de Status de Simulação */}
+      {isTestMode && (
+        <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md px-6 py-2 rounded-full flex flex-col items-center shadow-2xl border border-white/20">
+           <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-white">SIMULAÇÃO ATIVA</span>
+           </div>
+           <div className="text-[8px] font-bold text-white/70 uppercase">Clique no mapa para se mover</div>
+        </div>
+      )}
 
       <div className="absolute inset-0 z-0">
         <GameMap 
@@ -210,9 +229,19 @@ const App: React.FC = () => {
 
       {view === AppState.HOME && user && (
         <div className="absolute inset-x-0 bottom-0 p-8 z-50">
+          <div className="flex justify-between items-end mb-6">
+            <div>
+              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Status da Rede</p>
+              <h2 className="text-2xl font-black italic uppercase">{user.nickname}</h2>
+            </div>
+            <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-2">
+              <MapPin size={12} className="text-blue-500" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Sinal: {userLocation ? 'OK' : 'BUSCANDO'}</span>
+            </div>
+          </div>
           <button 
             onClick={startRun}
-            className="w-full bg-blue-600 h-20 rounded-[32px] font-black text-2xl uppercase italic tracking-tighter shadow-[0_20px_60px_rgba(37,99,235,0.4)] active:scale-95 transition-all"
+            className="w-full bg-blue-600 h-20 rounded-[32px] font-black text-2xl uppercase italic tracking-tighter shadow-[0_20px_60px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-4"
           >
             INICIAR CONQUISTA
           </button>
@@ -223,16 +252,16 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
           <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-12 border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
             <div className="flex items-start gap-5 mb-10">
-               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-2xl shadow-lg shadow-red-500/20">DmN</div>
+               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-2xl shadow-lg shadow-red-500/20 text-white">DmN</div>
                <p className="text-[15px] font-bold text-white leading-snug pt-1">
-                 Corra para conquistar o território, mas garanta que o ponto de início e fim estejam a menos de 200m para valer!
+                 Corra para conquistar o território, feche o polígono para dominar a área interna!
                </p>
             </div>
             <button 
               onClick={confirmTutorial}
               className="w-full bg-white text-black py-6 rounded-[28px] font-[900] uppercase text-xl tracking-wide shadow-xl active:scale-95 transition-all"
             >
-              NEXT
+              ENTENDIDO
             </button>
           </div>
         </div>
