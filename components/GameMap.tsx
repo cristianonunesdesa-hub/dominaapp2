@@ -75,7 +75,7 @@ const GameMap: React.FC<GameMapProps> = ({
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
       const [latStr, lngStr] = cell.id.split('_');
       L.circle([parseFloat(latStr), parseFloat(lngStr)], {
-        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, fillColor: ownerColor, fillOpacity: 0.4, interactive: false
+        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, fillColor: ownerColor, fillOpacity: 0.6, interactive: false
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, users]);
@@ -121,15 +121,14 @@ const GameMap: React.FC<GameMapProps> = ({
       <style>{`
         .leaflet-container { background: #080808 !important; }
         .territory-liquid-engine { 
-          filter: blur(12px) contrast(200%) brightness(1.1); 
-          opacity: 0.15; /* TRANSPARÊNCIA MUITO MAIS SUAVE */
-          mix-blend-mode: screen; 
+          filter: blur(4px); 
+          opacity: 0.6; /* OPACIDADE EM 60% REAIS SEM SCREEN BLENDING */
           z-index: 400; 
           pointer-events: none !important; 
         }
-        .tactical-trail-engine { filter: drop-shadow(0 0 6px rgba(255,255,255,0.3)); z-index: 401; pointer-events: none !important; }
+        .tactical-trail-engine { filter: drop-shadow(0 0 4px rgba(255,255,255,0.2)); z-index: 401; pointer-events: none !important; }
         .player-marker { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .map-tiles { opacity: 0.3; filter: invert(100%) hue-rotate(180deg) brightness(0.4) saturate(0.2); }
+        .map-tiles { opacity: 0.4; filter: invert(100%) hue-rotate(180deg) brightness(0.4) saturate(0.1); }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" />
     </>

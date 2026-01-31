@@ -31,16 +31,9 @@ const App: React.FC = () => {
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
   const [battleReport, setBattleReport] = useState<string>('');
 
-  // Fix: Added missing state variables for login/auth flow
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
-
-  const generateLocalReport = (activity: Activity) => {
-    const area = activity.capturedCellIds.size * CELL_AREA_M2;
-    if (area > 5000) return `Domínio tático estendido. Rede DmN consolidada neste setor.`;
-    return `Setores sincronizados. Continue a expansão do sinal, Agente.`;
-  };
 
   const syncGlobalState = async (newCapturedCells: Cell[] = []) => {
     if (!user) return;
@@ -109,7 +102,7 @@ const App: React.FC = () => {
             
             for (let i = 0; i < newPoints.length - 3; i++) {
               if (segmentsIntersect(pA, pB, newPoints[i], newPoints[i + 1])) {
-                const polygon = [...newPoints.slice(i), newPoints[i]];
+                const polygon = [...newPoints.slice(i), userLocation];
                 const enclosedIds = getEnclosedCellIds(polygon);
                 
                 if (enclosedIds.length > 0) {
@@ -133,14 +126,14 @@ const App: React.FC = () => {
                     }
                   });
 
-                  // ATUALIZAÇÃO LOCAL IMEDIATA (PINTURA INSTANTÂNEA)
+                  // ATUALIZAÇÃO LOCAL IMEDIATA
                   setCells(prev => ({ ...prev, ...localCells }));
                   syncGlobalState(syncList); 
                   
                   setShowConfetti(true);
                   setTimeout(() => setShowConfetti(false), 2500);
                   
-                  // RESET IMEDIATO DO LAÇO ATIVO
+                  // RESET DO LAÇO ATIVO (MANTENDO O CAMINHO TOTAL)
                   setCurrentActivity({ 
                     ...currentActivity, 
                     points: [userLocation], 
@@ -158,7 +151,6 @@ const App: React.FC = () => {
     }
   }, [userLocation, view, isTestMode]);
 
-  // Fix: Integrated generateBattleReport from Gemini service for enhanced feedback
   const stopActivity = async () => {
     if (!currentActivity || !user) return;
     const finalActivity = { ...currentActivity, endTime: Date.now() };
@@ -171,8 +163,7 @@ const App: React.FC = () => {
       const report = await generateBattleReport(finalActivity, user.nickname);
       setBattleReport(report);
     } catch (error) {
-      console.error("Gemini Error:", error);
-      setBattleReport(generateLocalReport(finalActivity));
+      setBattleReport("Operação finalizada. Solo neutralizado e integrado ao sistema.");
     }
   };
 
@@ -215,7 +206,6 @@ const App: React.FC = () => {
            <div className="w-full max-w-xs space-y-4">
               <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
               <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              {/* Added error display for authentication feedback */}
               {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center mt-2 animate-pulse">{loginError}</p>}
               <div className="flex gap-2 pt-4">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase italic">Login</button>

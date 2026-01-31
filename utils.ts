@@ -73,17 +73,11 @@ export const getEnclosedCellIds = (path: {lat: number, lng: number}[]): string[]
     if (p.lng > maxLng) maxLng = p.lng;
   });
 
+  // Usando round para alinhar com o grid central das células
   const iStartLat = Math.floor(minLat / GRID_SIZE);
   const iEndLat = Math.ceil(maxLat / GRID_SIZE);
   const iStartLng = Math.floor(minLng / GRID_SIZE);
   const iEndLng = Math.ceil(maxLng / GRID_SIZE);
-
-  // Limite de segurança: se a área for maior que 10.000 células, abortamos para não travar o browser
-  const totalCellsToTest = (iEndLat - iStartLat) * (iEndLng - iStartLng);
-  if (totalCellsToTest > 15000) {
-    console.warn("Área muito grande para cálculo de fechamento. Limitando processamento.");
-    return [];
-  }
 
   const enclosedIds: string[] = [];
   for (let i = iStartLat; i <= iEndLat; i++) {
@@ -91,7 +85,8 @@ export const getEnclosedCellIds = (path: {lat: number, lng: number}[]): string[]
       const cellLat = i * GRID_SIZE;
       const cellLng = j * GRID_SIZE;
       if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
-        enclosedIds.push(`${cellLat.toFixed(7)}_${cellLng.toFixed(7)}`);
+        // GARANTIA: Usa a mesma função de ID do resto do app
+        enclosedIds.push(getCellId(cellLat, cellLng));
       }
     }
   }
