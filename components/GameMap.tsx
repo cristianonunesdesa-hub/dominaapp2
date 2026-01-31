@@ -19,6 +19,7 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
+  const fullPathLayerRef = useRef<L.Polyline | null>(null);
   const territoryCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
@@ -34,10 +35,15 @@ const GameMap: React.FC<GameMapProps> = ({
         maxZoom: 22, className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Usando Canvas dedicado para performance e controle de opacidade
       territoryCanvasRef.current = L.canvas({ padding: 0.5, className: 'territory-layer' }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
+      // Trilha Total (Histórico da corrida atual)
+      fullPathLayerRef.current = L.polyline([], {
+        color: activeUser?.color || '#FFFFFF', weight: 3, opacity: 0.2, dashArray: '5, 10'
+      }).addTo(mapRef.current);
+
+      // Trilha Ativa (O laço que está sendo fechado)
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round'
       }).addTo(mapRef.current);
@@ -54,7 +60,7 @@ const GameMap: React.FC<GameMapProps> = ({
       const [lat, lng] = cell.id.split('_').map(parseFloat);
       L.circle([lat, lng], {
         radius: 12, renderer: territoryCanvasRef.current!, stroke: false, 
-        fillColor: color, fillOpacity: 1.0 // Sólido aqui para que a opacidade global de 60% seja controlada pelo CSS da camada
+        fillColor: color, fillOpacity: 1.0 
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells]);
@@ -66,8 +72,8 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker([lat, lng], {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="relative w-5 h-5 flex items-center justify-center"><div class="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-xl"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div></div>`,
-            iconSize: [20, 20], iconAnchor: [10, 10]
+            html: `<div class="relative w-6 h-6 flex items-center justify-center"><div class="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-2xl"><div class="w-2 h-2 rounded-full" style="background-color: ${color}"></div></div></div>`,
+            iconSize: [24, 24], iconAnchor: [12, 12]
           })
         }).addTo(mapRef.current!);
       } else {
@@ -83,20 +89,23 @@ const GameMap: React.FC<GameMapProps> = ({
       activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
       if (activeUser) activeTrailLayerRef.current.setStyle({ color: activeUser.color });
     }
-  }, [activeTrail, activeUser]);
+    if (fullPathLayerRef.current) {
+      fullPathLayerRef.current.setLatLngs(currentPath?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
+      if (activeUser) fullPathLayerRef.current.setStyle({ color: activeUser.color });
+    }
+  }, [activeTrail, currentPath, activeUser]);
 
   return (
     <>
       <style>{`
         .territory-layer { 
-          opacity: 0.6 !important; /* OPACIDADE EM 60% REAIS */
-          filter: blur(4px);
+          opacity: 0.6 !important; /* 60% REAIS */
+          filter: blur(5px);
           pointer-events: none;
-          z-index: 400;
         }
-        .map-tiles { opacity: 0.35; filter: invert(100%) brightness(0.6) saturate(0.2); }
-        .leaflet-container { background: #080808 !important; }
-        .player-marker { z-index: 1000 !important; }
+        .map-tiles { opacity: 0.3; filter: invert(100%) brightness(0.6) saturate(0.1); }
+        .leaflet-container { background: #050505 !important; }
+        .player-marker { transition: all 0.3s ease-out; z-index: 1000 !important; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" />
     </>
