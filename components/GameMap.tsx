@@ -73,7 +73,6 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
-  // Alvo de Simulação
   useEffect(() => {
     if (!mapRef.current) return;
     if (targetMarkerRef.current) targetMarkerRef.current.remove();
@@ -98,19 +97,42 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, [simTarget, userLocation]);
 
-  // Marcadores de Jogadores (Sem glow excessivo)
   useEffect(() => {
     if (!mapRef.current) return;
 
+    // 1. Jogador Local (Prioridade máxima de renderização)
+    if (userLocation && activeUser) {
+      const id = activeUserId;
+      const color = activeUser.color || '#3B82F6';
+      
+      if (!playerMarkersRef.current[id]) {
+        playerMarkersRef.current[id] = L.marker([userLocation.lat, userLocation.lng], {
+          icon: L.divIcon({
+            className: 'player-marker-local',
+            html: `<div class="relative w-12 h-12 flex items-center justify-center">
+                    <div class="absolute inset-0 bg-white/5 blur-sm rounded-full"></div>
+                    <div class="absolute inset-0 border-2 border-white/20 rounded-full animate-ping"></div>
+                    <div class="w-6 h-6 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-[0_0_15px_rgba(255,255,255,0.4)]">
+                      <div class="w-3 h-3 rounded-full animate-pulse" style="background-color: ${color}"></div>
+                    </div>
+                  </div>`,
+            iconSize: [48, 48], iconAnchor: [24, 24]
+          })
+        }).addTo(mapRef.current!);
+      } else {
+        playerMarkersRef.current[id].setLatLng([userLocation.lat, userLocation.lng]);
+      }
+    }
+
+    // 2. Outros Jogadores
     Object.values(users).forEach((u: User) => {
-      if (!u.lat || !u.lng) return;
+      if (!u.lat || !u.lng || u.id === activeUserId) return;
       if (!playerMarkersRef.current[u.id]) {
         playerMarkersRef.current[u.id] = L.marker([u.lat, u.lng], {
           icon: L.divIcon({
             className: 'player-marker',
             html: `<div class="relative w-8 h-8 flex items-center justify-center">
-                    <div class="absolute inset-0 bg-white/5 blur-sm rounded-full"></div>
-                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-xl">
+                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white/40 flex items-center justify-center relative z-10 shadow-xl">
                       <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${u.color}"></div>
                     </div>
                   </div>`,
@@ -132,9 +154,8 @@ const GameMap: React.FC<GameMapProps> = ({
     if (userLocation) {
       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
     }
-  }, [users, userLocation, activeUserId]);
+  }, [users, userLocation, activeUserId, activeUser]);
 
-  // Renderização de Setores (Células) - DEFINIÇÃO TÁTICA
   useEffect(() => {
     if (!territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
@@ -143,7 +164,6 @@ const GameMap: React.FC<GameMapProps> = ({
       const color = isHostile ? '#EF4444' : (cell.ownerColor || '#3B82F6');
       const [lat, lng] = cell.id.split('_').map(parseFloat);
       
-      // Estilo Célula: Borda nítida com preenchimento sólido sutil
       L.circle([lat, lng], {
         radius: 26,
         renderer: territoryCanvasRef.current!, 
@@ -171,19 +191,18 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        /* MAPA TÁTICO: REMOÇÃO DE "MANCHAS" */
         .leaflet-pane.leaflet-overlay-pane {
           mix-blend-mode: screen;
           opacity: 0.95;
-          filter: none !important; /* Remove qualquer blur global */
+          filter: none !important;
         }
         .map-tiles { 
           opacity: 0.35; 
           filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1);
         }
-        .player-marker { 
+        .player-marker-local, .player-marker { 
           transition: all 0.1s linear; 
-          z-index: 1000 !important; 
+          z-index: 2500 !important; 
         }
         .target-marker { 
           z-index: 2000 !important; 

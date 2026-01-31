@@ -34,7 +34,6 @@ const App: React.FC = () => {
   useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
 
-  // Login Persistência
   useEffect(() => {
     const saved = localStorage.getItem('dmn_user_session');
     if (saved) {
@@ -74,7 +73,6 @@ const App: React.FC = () => {
     } catch (e) { console.error("Sync failed", e); }
   }, [user]);
 
-  // Motor de Simulação Pro (60 FPS)
   const animateSimulation = useCallback((time: number) => {
     if (lastUpdateRef.current !== null && simTarget && userLocationRef.current) {
       const deltaTime = (time - lastUpdateRef.current) / 1000;
@@ -114,7 +112,6 @@ const App: React.FC = () => {
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [isTestMode, simTarget, animateSimulation]);
 
-  // GPS Real
   useEffect(() => {
     if (isTestMode) {
       if (!userLocation) setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
@@ -128,7 +125,6 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
-  // Capture Loop
   useEffect(() => {
     const activity = activityRef.current;
     const loc = userLocation;
@@ -215,7 +211,6 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans select-none">
-      {/* OVERLAY TÁTICO: VINHETA E RUÍDO */}
       <div className="fixed inset-0 z-[5000] pointer-events-none vignette-overlay"></div>
       <div className="fixed inset-0 z-[5001] pointer-events-none grain-overlay"></div>
       <div className="fixed inset-0 z-[5002] pointer-events-none scanlines"></div>
@@ -232,7 +227,6 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* HUD SIMULAÇÃO */}
       <div className="absolute top-12 inset-x-5 z-[2500] flex flex-col gap-2 pointer-events-none">
         <div className="flex justify-between items-start">
           <button 
@@ -314,6 +308,7 @@ const App: React.FC = () => {
           <div className="pointer-events-auto relative">
             <button 
               onClick={() => { 
+                if (!userLocation) return;
                 setView(AppState.ACTIVE); 
                 setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation!], fullPath: [userLocation!], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); 
               }} 
