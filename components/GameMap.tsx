@@ -114,11 +114,9 @@ const GameMap: React.FC<GameMapProps> = ({
     territoryGroupRef.current.clearLayers();
     labelGroupRef.current.clearLayers();
 
-    // Reduzi para 18 para as etiquetas aparecerem mais cedo
-    const showIdentity = zoomLevel >= 18;
+    const showIdentity = zoomLevel >= 17;
 
     (Object.values(cells) as any[]).forEach((cell) => {
-      // Prioridade: info vindo diretamente na célula (Sync robusto) ou info vindo da lista de usuários ativos
       const activeOwner = users[cell.ownerId || ''];
       const ownerNickname = cell.ownerNickname || activeOwner?.nickname;
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
@@ -129,32 +127,36 @@ const GameMap: React.FC<GameMapProps> = ({
       
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
-        stroke: false,
+        stroke: true,
+        weight: 0.5,
+        color: ownerColor,
         fillColor: ownerColor,
-        fillOpacity: cell.ownerId ? 0.6 : 0.3,
+        fillOpacity: cell.ownerId ? 0.4 : 0.2,
         interactive: false
       }).addTo(territoryGroupRef.current!);
 
+      // Mostra nomes apenas se o nickname existir e em zooms adequados
       if (showIdentity && ownerNickname) {
         const centerLat = (b[0] + b[2]) / 2;
         const centerLng = (b[1] + b[3]) / 2;
         
+        // Aumentado para scale-[0.5] para melhor visibilidade
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'cell-identity-label',
             html: `
-              <div class="flex flex-col items-center justify-center scale-[0.35] origin-center opacity-80">
+              <div class="flex flex-col items-center justify-center scale-[0.5] origin-center">
                 ${ownerAvatarUrl ? `
-                <div class="w-10 h-10 rounded-full border-2 border-white/50 overflow-hidden shadow-lg bg-black">
+                <div class="w-12 h-12 rounded-full border-2 border-white overflow-hidden shadow-2xl bg-black">
                   <img src="${ownerAvatarUrl}" class="w-full h-full object-cover" />
                 </div>` : ''}
-                <div class="mt-1 px-2 py-0.5 bg-black/60 rounded backdrop-blur-sm border border-white/10 whitespace-nowrap">
-                   <span class="text-[12px] font-black uppercase tracking-tighter text-white">${ownerNickname}</span>
+                <div class="mt-1 px-3 py-1 bg-black rounded-lg border border-white/20 whitespace-nowrap shadow-2xl">
+                   <span class="text-[14px] font-black uppercase tracking-tighter text-white">${ownerNickname}</span>
                 </div>
               </div>
             `,
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
+            iconSize: [60, 60],
+            iconAnchor: [30, 30]
           }),
           interactive: false
         }).addTo(labelGroupRef.current!);
@@ -182,8 +184,8 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker(pos, {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="relative">${isMe ? '<div class="absolute -inset-4 bg-blue-500/30 rounded-full animate-ping"></div>' : ''}<div class="w-6 h-6 rounded-full bg-black border-2 border-white shadow-xl" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover rounded-full" /></div></div>`,
-            iconSize: [24, 24], iconAnchor: [12, 12]
+            html: `<div class="relative">${isMe ? '<div class="absolute -inset-4 bg-blue-500/30 rounded-full animate-ping"></div>' : ''}<div class="w-8 h-8 rounded-full bg-black border-2 border-white shadow-xl flex items-center justify-center overflow-hidden" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover" /></div></div>`,
+            iconSize: [32, 32], iconAnchor: [16, 16]
           }),
           zIndexOffset: isMe ? 1000 : 900
         }).addTo(mapRef.current!);
@@ -214,7 +216,7 @@ const GameMap: React.FC<GameMapProps> = ({
         .map-tiles { filter: brightness(1.2) contrast(1.1) saturate(0.8); }
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
         @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
-        .cell-identity-label { pointer-events: none !important; }
+        .cell-identity-label { pointer-events: none !important; z-index: 500 !important; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" style={{ minHeight: '100%' }} />
     </>

@@ -74,7 +74,6 @@ const App: React.FC = () => {
         setCells(prev => {
           const merged = { ...prev };
           Object.keys(data.cells).forEach(id => {
-            // Se a célula já for minha localmente, não deixo o Sync sobrescrever
             if (merged[id]?.ownerId === user.id) return;
             merged[id] = data.cells[id];
           });
@@ -286,7 +285,20 @@ const App: React.FC = () => {
     <div className="relative h-full w-full overflow-hidden font-sans select-none bg-black text-white">
       {showConfetti && <ConfettiEffect />}
       {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers)} currentUserId={user.id} onBack={() => setView(AppState.HOME)} />}
-      {view === AppState.PROFILE && <AvatarCustomizer currentAvatar={user.avatarUrl} userColor={user.color} onBack={() => setView(AppState.HOME)} onSave={(url) => { const u = { ...user, avatarUrl: url }; setUser(u); localStorage.setItem('domina_current_session', JSON.stringify(u)); setView(AppState.HOME); }} />}
+      {view === AppState.PROFILE && (
+        <AvatarCustomizer 
+          currentAvatar={user.avatarUrl} 
+          userColor={user.color} 
+          onBack={() => setView(AppState.HOME)} 
+          onSave={(url, color) => { 
+            const u = { ...user, avatarUrl: url, color: color }; 
+            setUser(u); 
+            localStorage.setItem('domina_current_session', JSON.stringify(u)); 
+            syncGlobalState();
+            setView(AppState.HOME); 
+          }} 
+        />
+      )}
       <div className={`absolute inset-0 z-0 transition-all duration-700 ${[AppState.SUMMARY, AppState.PROFILE, AppState.LEADERBOARD].includes(view) ? 'opacity-30 blur-sm' : 'opacity-100'}`}>
         <GameMap 
           userLocation={userLocation} 

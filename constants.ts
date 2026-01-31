@@ -1,6 +1,6 @@
 
-export const GRID_SIZE = 0.00006; // Aproximadamente 6-7m para altíssima precisão de captura
-export const CELL_AREA_M2 = 45; // Área aproximada de uma célula do novo grid
+export const GRID_SIZE = 0.00006; 
+export const CELL_AREA_M2 = 45; 
 export const ANTI_CHEAT_SPEED_LIMIT_KMH = 25;
 export const XP_PER_KM = 100;
 export const XP_PER_SECTOR = 2; 
@@ -11,24 +11,21 @@ export const LEVEL_XP_BASE = 1000;
 export const COLORS = {
   PRIMARY: '#3B82F6', 
   ACCENT: '#10B981', 
-  DANGER: '#EF4444', 
+  DANGER: '#FF5A5F', 
   NEUTRAL: '#4B5563',
   GOLD: '#F59E0B'
 };
 
+// Cores baseadas na imagem de referência 6
 export const TACTICAL_COLORS = [
+  '#10B981', // Green
+  '#FF5A5F', // Coral/Red
   '#3B82F6', // Blue
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#EF4444', // Red
-  '#8B5CF6', // Violet
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#F97316', // Orange
-  '#84CC16', // Lime
-  '#A855F7', // Purple
-  '#14B8A6', // Teal
   '#FACC15', // Yellow
+  '#A855F7', // Purple
+  '#9CA3AF', // Grey
+  '#F97316', // Orange
+  '#14B8A6', // Teal
 ];
 
 export const BADGES = [
