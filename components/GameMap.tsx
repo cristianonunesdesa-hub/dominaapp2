@@ -51,16 +51,14 @@ const GameMap: React.FC<GameMapProps> = ({
       trailCanvasRef.current = L.canvas({ padding: 0.1, className: 'tactical-trail-engine' }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
-      // Trilha persistente (missão total)
       fullPathLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', 
-        weight: 3, opacity: 0.4, dashArray: '5, 10', renderer: trailCanvasRef.current
+        weight: 2, opacity: 0.2, dashArray: '4, 8', renderer: trailCanvasRef.current
       }).addTo(mapRef.current);
 
-      // Trilha ativa (ciclo de cerco atual)
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', 
-        weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', renderer: trailCanvasRef.current
+        weight: 5, opacity: 0.8, lineCap: 'round', lineJoin: 'round', renderer: trailCanvasRef.current
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => { 
@@ -77,7 +75,7 @@ const GameMap: React.FC<GameMapProps> = ({
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
       const [latStr, lngStr] = cell.id.split('_');
       L.circle([parseFloat(latStr), parseFloat(lngStr)], {
-        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, fillColor: ownerColor, fillOpacity: 0.8, interactive: false
+        radius: 12, renderer: territoryCanvasRef.current!, stroke: false, fillColor: ownerColor, fillOpacity: 0.4, interactive: false
       }).addTo(territoryGroupRef.current!);
     });
   }, [cells, users]);
@@ -93,7 +91,7 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker(pos, {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="relative flex items-center justify-center w-6 h-6"><div class="absolute inset-0 bg-white/30 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-2xl"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div></div>`,
+            html: `<div class="relative flex items-center justify-center w-6 h-6"><div class="absolute inset-0 bg-white/20 blur-md rounded-full animate-pulse"></div><div class="w-4 h-4 rounded-full bg-black border-[1.5px] border-white/80 flex items-center justify-center relative z-10"><div class="w-1.5 h-1.5 rounded-full" style="background-color: ${color}"></div></div></div>`,
             iconSize: [24, 24], iconAnchor: [12, 12]
           }),
           zIndexOffset: isMe ? 1000 : 900
@@ -123,15 +121,15 @@ const GameMap: React.FC<GameMapProps> = ({
       <style>{`
         .leaflet-container { background: #080808 !important; }
         .territory-liquid-engine { 
-          filter: blur(14px) contrast(400%) brightness(1.2); 
-          opacity: 0.3; /* TRANSPARÊNCIA SOLICITADA */
+          filter: blur(12px) contrast(200%) brightness(1.1); 
+          opacity: 0.15; /* TRANSPARÊNCIA MUITO MAIS SUAVE */
           mix-blend-mode: screen; 
           z-index: 400; 
           pointer-events: none !important; 
         }
-        .tactical-trail-engine { filter: drop-shadow(0 0 8px rgba(255,255,255,0.4)); z-index: 401; pointer-events: none !important; }
+        .tactical-trail-engine { filter: drop-shadow(0 0 6px rgba(255,255,255,0.3)); z-index: 401; pointer-events: none !important; }
         .player-marker { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .map-tiles { opacity: 0.35; }
+        .map-tiles { opacity: 0.3; filter: invert(100%) hue-rotate(180deg) brightness(0.4) saturate(0.2); }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" />
     </>

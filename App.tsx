@@ -6,7 +6,9 @@ import { calculateDistance, getEnclosedCellIds, segmentsIntersect } from './util
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
-import { Radio, Zap, ChevronRight, Share2, Target, ShieldCheck } from 'lucide-react';
+import { Radio, Zap, ChevronRight, Share2, ShieldCheck } from 'lucide-react';
+// Import the Gemini service to generate tactical battle reports
+import { generateBattleReport } from './services/gemini';
 
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
@@ -29,17 +31,15 @@ const App: React.FC = () => {
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
   const [battleReport, setBattleReport] = useState<string>('');
 
+  // Fix: Added missing state variables for login/auth flow
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const generateLocalReport = (activity: Activity) => {
     const area = activity.capturedCellIds.size * CELL_AREA_M2;
-    const km = (activity.distanceMeters / 1000).toFixed(2);
-    
-    if (area > 5000) return `Domínio massivo detectado. Perímetro de ${area}m² integrado à rede. Agente operou em nível Alpha.`;
-    if (area > 1000) return `Expansão tática concluída. ${km}km percorridos com sucesso. Setores sincronizados.`;
-    return `Patrulha de rotina finalizada. Dados de rede atualizados. Continue expandindo o sinal.`;
+    if (area > 5000) return `Domínio tático estendido. Rede DmN consolidada neste setor.`;
+    return `Setores sincronizados. Continue a expansão do sinal, Agente.`;
   };
 
   const syncGlobalState = async (newCapturedCells: Cell[] = []) => {
@@ -57,7 +57,7 @@ const App: React.FC = () => {
       });
       const data = await res.json();
       if (data.users) setGlobalUsers(data.users.reduce((acc: any, u: any) => ({ ...acc, [u.id]: u }), {}));
-      if (data.cells) setCells(data.cells);
+      if (data.cells) setCells(prev => ({ ...prev, ...data.cells }));
     } catch (e) { console.warn("Sync error", e); }
   };
 
@@ -102,28 +102,48 @@ const App: React.FC = () => {
         if (d > threshold) {
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
+          
           if (newPoints.length > 3) {
             const pA = newPoints[newPoints.length - 2];
             const pB = newPoints[newPoints.length - 1];
+            
             for (let i = 0; i < newPoints.length - 3; i++) {
               if (segmentsIntersect(pA, pB, newPoints[i], newPoints[i + 1])) {
                 const polygon = [...newPoints.slice(i), newPoints[i]];
                 const enclosedIds = getEnclosedCellIds(polygon);
+                
                 if (enclosedIds.length > 0) {
-                  const syncCells: Cell[] = [];
+                  const localCells: Record<string, Cell> = {};
+                  const syncList: Cell[] = [];
+                  
                   enclosedIds.forEach(id => {
                     if (!currentActivity.capturedCellIds.has(id)) {
-                      syncCells.push({ id, ownerId: user.id, ownerNickname: user.nickname, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 });
+                      const newCell: Cell = { 
+                        id, 
+                        ownerId: user.id, 
+                        ownerNickname: user.nickname, 
+                        ownerColor: user.color,
+                        bounds: [0,0,0,0], 
+                        updatedAt: Date.now(), 
+                        defense: 1 
+                      };
+                      localCells[id] = newCell;
+                      syncList.push(newCell);
                       currentActivity.capturedCellIds.add(id);
                     }
                   });
-                  syncGlobalState(syncCells); 
+
+                  // ATUALIZAÇÃO LOCAL IMEDIATA (PINTURA INSTANTÂNEA)
+                  setCells(prev => ({ ...prev, ...localCells }));
+                  syncGlobalState(syncList); 
+                  
                   setShowConfetti(true);
-                  setTimeout(() => setShowConfetti(false), 3000);
-                  // RESET DA TRILHA ATIVA (CICLO FECHADO)
+                  setTimeout(() => setShowConfetti(false), 2500);
+                  
+                  // RESET IMEDIATO DO LAÇO ATIVO
                   setCurrentActivity({ 
                     ...currentActivity, 
-                    points: [userLocation], // Reinicia o laço
+                    points: [userLocation], 
                     fullPath: newFullPath, 
                     distanceMeters: currentActivity.distanceMeters + d 
                   });
@@ -138,16 +158,26 @@ const App: React.FC = () => {
     }
   }, [userLocation, view, isTestMode]);
 
-  const stopActivity = () => {
-    if (!currentActivity) return;
+  // Fix: Integrated generateBattleReport from Gemini service for enhanced feedback
+  const stopActivity = async () => {
+    if (!currentActivity || !user) return;
     const finalActivity = { ...currentActivity, endTime: Date.now() };
-    setBattleReport(generateLocalReport(finalActivity));
+    setBattleReport("Compilando dados táticos...");
     setCurrentActivity(finalActivity);
     setView(AppState.SUMMARY);
     syncGlobalState();
+
+    try {
+      const report = await generateBattleReport(finalActivity, user.nickname);
+      setBattleReport(report);
+    } catch (error) {
+      console.error("Gemini Error:", error);
+      setBattleReport(generateLocalReport(finalActivity));
+    }
   };
 
   const handleAuth = async (action: 'login' | 'register') => {
+    setLoginError(null);
     const selectedColor = getDeterministicColor(loginNickname.toLowerCase());
     try {
       const res = await fetch('/api/auth', {
@@ -185,6 +215,8 @@ const App: React.FC = () => {
            <div className="w-full max-w-xs space-y-4">
               <input type="text" placeholder="AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
               <input type="password" placeholder="SENHA" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 uppercase font-black text-center outline-none" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              {/* Added error display for authentication feedback */}
+              {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center mt-2 animate-pulse">{loginError}</p>}
               <div className="flex gap-2 pt-4">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase italic">Login</button>
                 <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 py-4 rounded-2xl font-black uppercase italic">Criar</button>
