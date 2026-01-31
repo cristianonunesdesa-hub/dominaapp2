@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
 import { COLORS, TACTICAL_COLORS, CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from './constants';
@@ -19,6 +20,7 @@ const getDeterministicColor = (nickname: string) => {
   for (let i = 0; i < nickname.length; i++) {
     hash = nickname.charCodeAt(i) + ((hash << 5) - hash);
   }
+  // Agora usa o módulo de 24 (tamanho da nova paleta)
   const index = Math.abs(hash) % TACTICAL_COLORS.length;
   return TACTICAL_COLORS[index];
 };
@@ -244,7 +246,6 @@ const App: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro de rede.");
-      // Fix: Changed 'cells_owned' to 'cellsOwned' to match the User interface property name.
       const mappedUser: User = { id: data.id, nickname: data.nickname, password: data.password, color: data.color, avatarUrl: data.avatar_url, xp: data.xp || 0, level: data.level || 1, totalAreaM2: data.total_area_m2 || 0, cellsOwned: data.cells_owned || 0, badges: [], dailyStreak: 1 };
       setUser(mappedUser);
       localStorage.setItem('domina_current_session', JSON.stringify(mappedUser));

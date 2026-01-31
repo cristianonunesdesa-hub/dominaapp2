@@ -16,16 +16,11 @@ export const COLORS = {
   GOLD: '#F59E0B'
 };
 
-// Cores baseadas na imagem de referência 6
+// Paleta expandida para 24 cores táticas (Referência: Estética INTVL/Mapbox)
 export const TACTICAL_COLORS = [
-  '#10B981', // Green
-  '#FF5A5F', // Coral/Red
-  '#3B82F6', // Blue
-  '#FACC15', // Yellow
-  '#A855F7', // Purple
-  '#9CA3AF', // Grey
-  '#F97316', // Orange
-  '#14B8A6', // Teal
+  '#10B981', '#FF5A5F', '#3B82F6', '#FACC15', '#A855F7', '#9CA3AF', '#F97316', '#14B8A6',
+  '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#6366F1', '#D946EF', '#F59E0B', '#2DD4BF',
+  '#FB7185', '#38BDF8', '#A3E635', '#C084FC', '#FB923C', '#4ADE80', '#22D3EE', '#818CF8'
 ];
 
 export const BADGES = [

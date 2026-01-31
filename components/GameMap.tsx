@@ -70,7 +70,6 @@ const GameMap: React.FC<GameMapProps> = ({
         color: 'rgba(255, 255, 255, 0.1)', weight: 2, opacity: 0.2, renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
 
-      // Linha de trilha ativa com visual neon (conforme referências 1 e 2)
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
@@ -86,36 +85,13 @@ const GameMap: React.FC<GameMapProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    if (targetMarkerRef.current) targetMarkerRef.current.remove();
-    if (targetLocation) {
-      targetMarkerRef.current = L.circleMarker([targetLocation.lat, targetLocation.lng], {
-        radius: 8, color: '#3B82F6', fillColor: '#3B82F6', fillOpacity: 1, weight: 2, className: 'target-dest-marker'
-      }).addTo(mapRef.current);
-    }
-  }, [targetLocation]);
-
-  useEffect(() => {
-    if (plannedRouteLayerRef.current) plannedRouteLayerRef.current.setLatLngs(plannedRoute?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
-  }, [plannedRoute]);
-
-  useEffect(() => {
-    if (previewPolygonRef.current) {
-      if (showLoopPreview && originalStartPoint && userLocation) {
-        const latLngs = [...activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple), [originalStartPoint.lat, originalStartPoint.lng]];
-        previewPolygonRef.current.setLatLngs(latLngs);
-        previewPolygonRef.current.setStyle({ color: activeUser?.color || 'white' });
-      } else previewPolygonRef.current.setLatLngs([]);
-    }
-  }, [showLoopPreview, activeTrail, originalStartPoint, userLocation, activeUser]);
-
-  useEffect(() => {
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
     (Object.values(cells) as any[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
+      const isMe = cell.ownerId === activeUserId;
 
       const b = getCellBounds(cell.id);
       const leafletBounds: L.LatLngExpression[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
@@ -123,15 +99,15 @@ const GameMap: React.FC<GameMapProps> = ({
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
         stroke: true,
-        weight: 1, // Borda um pouco mais visível para separar os blocos
+        weight: isMe ? 2 : 1.2, // Borda mais grossa para o meu território
         color: ownerColor,
-        opacity: 0.3,
+        opacity: isMe ? 0.6 : 0.4, // Mais opaco nas bordas se for meu
         fillColor: ownerColor,
-        fillOpacity: cell.ownerId ? 0.45 : 0.1,
+        fillOpacity: cell.ownerId ? (isMe ? 0.55 : 0.4) : 0.1,
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
-  }, [cells, users, zoomLevel]);
+  }, [cells, users, zoomLevel, activeUserId]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -155,8 +131,8 @@ const GameMap: React.FC<GameMapProps> = ({
             className: 'player-marker',
             html: `
               <div class="relative">
-                ${isMe ? `<div class="absolute -inset-6 rounded-full animate-ping" style="background-color: ${color}33"></div>` : ''}
-                <div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center overflow-hidden" style="border-color: ${color}">
+                ${isMe ? `<div class="absolute -inset-6 rounded-full animate-ping" style="background-color: ${color}44"></div>` : ''}
+                <div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-[0_0_20px_rgba(0,0,0,1)] flex items-center justify-center overflow-hidden" style="border-color: ${color}">
                   <img src="${avatar}" class="w-full h-full object-cover" />
                 </div>
               </div>
@@ -194,7 +170,7 @@ const GameMap: React.FC<GameMapProps> = ({
   return (
     <>
       <style>{`
-        .leaflet-container { cursor: crosshair !important; }
+        .leaflet-container { cursor: crosshair !important; background: #000 !important; }
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
         @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
       `}</style>
