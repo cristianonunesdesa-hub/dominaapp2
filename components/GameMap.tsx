@@ -30,7 +30,6 @@ const GameMap: React.FC<GameMapProps> = ({
   const previewPolygonRef = useRef<L.Polygon | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
-  const labelGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
   const targetMarkerRef = useRef<L.CircleMarker | null>(null);
   const mapId = 'domina-tactical-map';
@@ -62,22 +61,22 @@ const GameMap: React.FC<GameMapProps> = ({
 
       canvasLayerRef.current = L.canvas({ padding: 0.1 }).addTo(mapRef.current);
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
-      labelGroupRef.current = L.layerGroup().addTo(mapRef.current);
       
       previewPolygonRef.current = L.polygon([], {
         fillColor: 'white', fillOpacity: 0.1, weight: 1, color: 'white', dashArray: '4, 4', renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
 
       pathLayerRef.current = L.polyline([], {
-        color: 'rgba(255, 255, 255, 0.1)', weight: 2, opacity: 0.3, renderer: canvasLayerRef.current, interactive: false
+        color: 'rgba(255, 255, 255, 0.1)', weight: 2, opacity: 0.2, renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
 
+      // Linha de trilha ativa com visual neon (conforme referências 1 e 2)
       activeTrailLayerRef.current = L.polyline([], {
-        color: 'white', weight: 4, opacity: 0.8, renderer: canvasLayerRef.current, interactive: false
+        color: activeUser?.color || '#FFFFFF', weight: 6, opacity: 0.9, renderer: canvasLayerRef.current, interactive: false
       }).addTo(mapRef.current);
 
       plannedRouteLayerRef.current = L.polyline([], {
-        color: '#3B82F6', weight: 4, opacity: 0.8, dashArray: '10, 15', interactive: false
+        color: '#3B82F6', weight: 4, opacity: 0.6, dashArray: '8, 12', interactive: false
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => { if (onMapClickRef.current) onMapClickRef.current(e.latlng.lat, e.latlng.lng); });
@@ -105,14 +104,14 @@ const GameMap: React.FC<GameMapProps> = ({
       if (showLoopPreview && originalStartPoint && userLocation) {
         const latLngs = [...activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple), [originalStartPoint.lat, originalStartPoint.lng]];
         previewPolygonRef.current.setLatLngs(latLngs);
+        previewPolygonRef.current.setStyle({ color: activeUser?.color || 'white' });
       } else previewPolygonRef.current.setLatLngs([]);
     }
-  }, [showLoopPreview, activeTrail, originalStartPoint, userLocation]);
+  }, [showLoopPreview, activeTrail, originalStartPoint, userLocation, activeUser]);
 
   useEffect(() => {
-    if (!mapRef.current || !territoryGroupRef.current || !labelGroupRef.current) return;
+    if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
-    labelGroupRef.current.clearLayers();
 
     (Object.values(cells) as any[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
@@ -124,10 +123,11 @@ const GameMap: React.FC<GameMapProps> = ({
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
         stroke: true,
-        weight: 0.5,
+        weight: 1, // Borda um pouco mais visível para separar os blocos
         color: ownerColor,
+        opacity: 0.3,
         fillColor: ownerColor,
-        fillOpacity: cell.ownerId ? 0.4 : 0.2,
+        fillOpacity: cell.ownerId ? 0.45 : 0.1,
         interactive: false
       }).addTo(territoryGroupRef.current!);
     });
@@ -153,8 +153,15 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId] = L.marker(pos, {
           icon: L.divIcon({
             className: 'player-marker',
-            html: `<div class="relative">${isMe ? '<div class="absolute -inset-4 bg-blue-500/30 rounded-full animate-ping"></div>' : ''}<div class="w-8 h-8 rounded-full bg-black border-2 border-white shadow-xl flex items-center justify-center overflow-hidden" style="border-color: ${color}"><img src="${avatar}" class="w-full h-full object-cover" /></div></div>`,
-            iconSize: [32, 32], iconAnchor: [16, 16]
+            html: `
+              <div class="relative">
+                ${isMe ? `<div class="absolute -inset-6 rounded-full animate-ping" style="background-color: ${color}33"></div>` : ''}
+                <div class="w-10 h-10 rounded-full bg-black border-[3px] shadow-[0_0_20px_rgba(0,0,0,0.8)] flex items-center justify-center overflow-hidden" style="border-color: ${color}">
+                  <img src="${avatar}" class="w-full h-full object-cover" />
+                </div>
+              </div>
+            `,
+            iconSize: [40, 40], iconAnchor: [20, 20]
           }),
           zIndexOffset: isMe ? 1000 : 900
         }).addTo(mapRef.current!);
@@ -162,7 +169,7 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId].setLatLng(pos);
       }
 
-      if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.05 });
+      if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.1 });
     };
 
     (Object.values(users) as User[]).forEach(u => {
@@ -176,16 +183,20 @@ const GameMap: React.FC<GameMapProps> = ({
   }, [users, activeUserId, userLocation, activeUser]);
 
   useEffect(() => { if (pathLayerRef.current) pathLayerRef.current.setLatLngs(currentPath.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [currentPath]);
-  useEffect(() => { if (activeTrailLayerRef.current) activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple)); }, [activeTrail]);
+  
+  useEffect(() => { 
+    if (activeTrailLayerRef.current) {
+      activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple));
+      if (activeUser) activeTrailLayerRef.current.setStyle({ color: activeUser.color });
+    } 
+  }, [activeTrail, activeUser]);
 
   return (
     <>
       <style>{`
-        .leaflet-container { cursor: crosshair !important; background: #050505 !important; }
-        .map-tiles { filter: brightness(1.2) contrast(1.1) saturate(0.8); }
+        .leaflet-container { cursor: crosshair !important; }
         .target-dest-marker { filter: drop-shadow(0 0 8px #3B82F6); animation: pulse-target 1.5s infinite; }
         @keyframes pulse-target { 0% { r: 6; opacity: 1; } 100% { r: 16; opacity: 0; } }
-        .cell-identity-label { pointer-events: none !important; z-index: 500 !important; }
       `}</style>
       <div id={mapId} className="h-full w-full outline-none" style={{ minHeight: '100%' }} />
     </>

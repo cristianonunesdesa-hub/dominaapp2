@@ -8,32 +8,50 @@
     <meta name="theme-color" content="#000000">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
+        :root {
+            --map-glow: rgba(59, 130, 246, 0.5);
+        }
         html, body, #root {
             height: 100%;
             width: 100%;
             margin: 0;
             padding: 0;
-            background-color: #050505;
+            background-color: #000000;
             overflow: hidden;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            font-family: 'Inter', sans-serif;
         }
         .leaflet-container {
-            background-color: #050505 !important;
-            background-image: 
-                linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
-            background-size: 40px 40px;
+            background-color: #000000 !important;
+        }
+        /* Efeito de mapa tático escuro */
+        .map-tiles {
+            filter: invert(100%) hue-rotate(180deg) brightness(0.4) contrast(1.2) saturate(0);
         }
         .safe-area-top {
             padding-top: env(safe-area-inset-top);
         }
         .safe-area-bottom {
             padding-bottom: env(safe-area-inset-bottom);
+        }
+        /* Custom scrollbar para QG e Ranking */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
         }
     </style>
 <script type="importmap">

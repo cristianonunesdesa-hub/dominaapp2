@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
 import { COLORS, TACTICAL_COLORS, CELL_AREA_M2, XP_PER_KM, XP_PER_SECTOR } from './constants';
@@ -15,7 +14,6 @@ import { Trophy, User as UserIcon, Zap, CheckCircle2, Radio, Lock, AlertCircle, 
 const CLOSE_LOOP_THRESHOLD_METERS = 35; 
 const LEVEL_XP_STEP = 1000;
 
-// Função simples para gerar um hash do nickname e escolher uma cor única
 const getDeterministicColor = (nickname: string) => {
   let hash = 0;
   for (let i = 0; i < nickname.length; i++) {
@@ -237,10 +235,7 @@ const App: React.FC = () => {
     if (loginNickname.length < 3) return setLoginError("Nickname deve ter 3+ caracteres.");
     if (loginPassword.length < 4) return setLoginError("Senha deve ter 4+ caracteres.");
     setIsSyncing(true);
-    
-    // Cor única para cada nome de usuário
     const selectedColor = getDeterministicColor(loginNickname.toLowerCase().trim());
-
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
@@ -249,6 +244,7 @@ const App: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro de rede.");
+      // Fix: Changed 'cells_owned' to 'cellsOwned' to match the User interface property name.
       const mappedUser: User = { id: data.id, nickname: data.nickname, password: data.password, color: data.color, avatarUrl: data.avatar_url, xp: data.xp || 0, level: data.level || 1, totalAreaM2: data.total_area_m2 || 0, cellsOwned: data.cells_owned || 0, badges: [], dailyStreak: 1 };
       setUser(mappedUser);
       localStorage.setItem('domina_current_session', JSON.stringify(mappedUser));
@@ -256,36 +252,11 @@ const App: React.FC = () => {
     } catch (err: any) { setLoginError(err.message); } finally { setIsSyncing(false); }
   };
 
-  if (view === AppState.LOGIN || !user) {
-    return (
-      <div className="absolute inset-0 bg-black z-[200] flex flex-col items-center justify-center p-8 overflow-y-auto">
-        <div className="mb-10 text-center animate-pulse">
-          <div className="w-20 h-20 bg-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)]">
-            <Radio size={40} className="text-white" />
-          </div>
-          <h1 className="text-6xl font-black italic tracking-tighter uppercase leading-none text-white">DOMINA</h1>
-          <p className="text-[10px] font-black text-blue-400 tracking-[0.4em] mt-3">SISTEMA DE DOMÍNIO TÁTICO</p>
-        </div>
-        <div className="w-full max-w-xs space-y-4">
-          {loginError && <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-[11px] text-red-200 uppercase font-black flex items-center gap-2 animate-bounce"> <AlertCircle size={14} /> {loginError} </div>}
-          <div className="space-y-1">
-            <input type="text" placeholder="CODINOME AGENTE" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginNickname} onChange={(e) => setLoginNickname(e.target.value)} />
-            <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/20" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => handleAuth('login')} disabled={isSyncing} className="flex-1 bg-white text-black py-4 rounded-2xl font-black uppercase italic flex items-center justify-center gap-2 active:scale-95 transition-all"> <LogIn size={18} /> ENTRAR </button>
-            <button onClick={() => handleAuth('register')} disabled={isSyncing} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase italic flex items-center justify-center gap-2 active:scale-95 transition-all border border-blue-400 shadow-xl"> <UserPlus size={18} /> NOVO </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative h-full w-full overflow-hidden font-sans select-none bg-black text-white">
       {showConfetti && <ConfettiEffect />}
-      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers)} currentUserId={user.id} onBack={() => setView(AppState.HOME)} />}
-      {view === AppState.PROFILE && (
+      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers)} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
+      {view === AppState.PROFILE && user && (
         <AvatarCustomizer 
           currentAvatar={user.avatarUrl} 
           userColor={user.color} 
@@ -304,7 +275,7 @@ const App: React.FC = () => {
           userLocation={userLocation} 
           cells={cells} 
           users={globalUsers} 
-          activeUserId={user.id} 
+          activeUserId={user?.id || ''} 
           activeUser={user}
           currentPath={currentActivity?.fullPath || []} 
           activeTrail={currentActivity?.points || []} 
@@ -316,34 +287,58 @@ const App: React.FC = () => {
         />
       </div>
       <div className="absolute top-12 right-6 z-50 flex flex-col items-end gap-3 pointer-events-none">
-        <button onClick={() => setIsSimulating(!isSimulating)} className={`p-3 rounded-2xl border flex items-center justify-center transition-all shadow-2xl pointer-events-auto ${isSimulating ? 'bg-blue-600 border-blue-400 text-white' : 'bg-black/60 border-white/10 text-white/40'}`}> <Cpu size={22} /> </button>
-        <button onClick={() => { localStorage.removeItem('domina_current_session'); setUser(null); setView(AppState.LOGIN); }} className="p-3 rounded-2xl border bg-red-600/20 border-red-500/30 text-red-500 pointer-events-auto shadow-xl"> <Radio size={22} className="rotate-180" /> </button>
+        <button onClick={() => setIsSimulating(!isSimulating)} className={`p-4 rounded-[20px] border flex items-center justify-center transition-all shadow-2xl pointer-events-auto ${isSimulating ? 'bg-blue-600 border-blue-400 text-white' : 'bg-black/60 border-white/10 text-white/40'}`}> <Cpu size={24} /> </button>
+        <button onClick={() => { localStorage.removeItem('domina_current_session'); setUser(null); setView(AppState.LOGIN); }} className="p-4 rounded-[20px] border bg-red-600/20 border-red-500/30 text-red-500 pointer-events-auto shadow-xl"> <Radio size={24} className="rotate-180" /> </button>
       </div>
-      {view === AppState.HOME && (
+      {view === AppState.HOME && user && (
         <div className="absolute inset-0 z-10 flex flex-col justify-between p-6 pointer-events-none">
           <div className="flex justify-between items-start w-full pointer-events-auto mt-6">
-            <button onClick={() => setView(AppState.PROFILE)} className="bg-gray-950/90 backdrop-blur-2xl px-4 py-3 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-gray-800 border border-white/10 overflow-hidden"> <img src={user.avatarUrl} className="w-full h-full object-cover" /> </div>
-              <div className="text-left"> <div className="text-[9px] font-black text-blue-500 uppercase leading-none">{user.nickname}</div> <div className="text-[12px] font-black italic mt-1 text-white">LVL {user.level}</div> </div>
+            <button onClick={() => setView(AppState.PROFILE)} className="bg-black/80 backdrop-blur-3xl px-5 py-4 rounded-[24px] border border-white/10 shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
+              <div className="w-12 h-12 rounded-full bg-gray-800 border-2 border-white/10 overflow-hidden shadow-inner"> <img src={user.avatarUrl} className="w-full h-full object-cover" /> </div>
+              <div className="text-left"> <div className="text-[10px] font-black text-blue-500 uppercase leading-none tracking-[0.2em]">{user.nickname}</div> <div className="text-[14px] font-[900] mt-1 text-white italic">AGENT LEVEL {user.level}</div> </div>
             </button>
-            <button onClick={() => setView(AppState.LEADERBOARD)} className="bg-gray-950/90 backdrop-blur-2xl px-4 py-3 rounded-2xl border border-white/10 shadow-2xl flex items-center gap-2 active:scale-95 transition-all"> <Trophy size={16} className="text-yellow-500" /> <div className="text-[10px] font-black uppercase">Ranking</div> </button>
+            <button onClick={() => setView(AppState.LEADERBOARD)} className="bg-black/80 backdrop-blur-3xl px-5 py-4 rounded-[24px] border border-white/10 shadow-2xl flex items-center gap-2 active:scale-95 transition-all"> <Trophy size={18} className="text-yellow-500" /> <div className="text-[11px] font-black uppercase tracking-widest">Global</div> </button>
           </div>
-          <div className="flex flex-col items-center gap-6 pointer-events-auto mb-12">
-            <button onClick={() => { if (!userLocation) return alert("Sinal GPS insuficiente."); setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation], fullPath: [userLocation], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="px-12 h-20 bg-blue-600 rounded-[32px] shadow-[0_20px_60px_rgba(37,99,235,0.5)] active:scale-95 flex items-center justify-center gap-4 text-white"> <Zap size={28} className="fill-white" /> <span className="font-black text-2xl uppercase tracking-tighter italic">INICIAR CONQUISTA</span> </button>
+          <div className="flex flex-col items-center gap-6 pointer-events-auto mb-16">
+            <button onClick={() => { if (!userLocation) return alert("Sinal GPS insuficiente."); setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation], fullPath: [userLocation], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="px-12 h-24 bg-blue-600 rounded-[40px] shadow-[0_25px_60px_rgba(37,99,235,0.4)] active:scale-95 flex items-center justify-center gap-4 text-white border-t border-white/20"> <Zap size={32} className="fill-white" /> <span className="font-[900] text-2xl uppercase tracking-tighter italic">INICIAR CONQUISTA</span> </button>
           </div>
         </div>
       )}
-      {view === AppState.ACTIVE && currentActivity && ( <ActivityOverlay activity={currentActivity} onStop={finishRun} isFinishing={isFinishing} /> )}
+      {view === AppState.ACTIVE && currentActivity && ( <ActivityOverlay activity={currentActivity} user={user} onStop={finishRun} isFinishing={isFinishing} /> )}
       {view === AppState.SUMMARY && summary && (
         <div className="absolute inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-8 overflow-y-auto animate-in fade-in duration-500">
-          <img src={user.avatarUrl} className="w-24 h-24 rounded-full border-2 border-blue-500 mb-6 shadow-2xl" />
-          <h2 className="text-[40px] font-black uppercase italic leading-none tracking-tighter text-white text-center mb-6">INCURSÃO<br/>FINALIZADA</h2>
-          <div className="grid grid-cols-2 gap-3 w-full max-w-md mb-10">
-             <div className="bg-white/[0.04] p-4 rounded-2xl border border-white/10 flex flex-col items-center"> <div className="text-[9px] font-bold text-gray-500 uppercase">Área</div> <div className="text-xl font-black italic">{summary.areaM2} m²</div> </div>
-             <div className="bg-white/[0.04] p-4 rounded-2xl border border-white/10 flex flex-col items-center"> <div className="text-[9px] font-bold text-gray-500 uppercase">XP</div> <div className="text-xl font-black italic text-emerald-400">+{summary.xpGained}</div> </div>
+          <div className="w-32 h-32 rounded-full border-[6px] border-blue-500 mb-8 shadow-[0_0_50px_rgba(37,99,235,0.3)] overflow-hidden">
+            <img src={user?.avatarUrl} className="w-full h-full object-cover" />
           </div>
-          <p className="italic text-gray-400 text-sm text-center max-w-sm mb-12 leading-relaxed">"{summary.report}"</p>
-          <button className="w-full max-w-sm bg-blue-600 py-5 rounded-3xl font-black text-lg uppercase italic shadow-xl active:scale-95 transition-all" onClick={() => { setView(AppState.HOME); setShowConfetti(false); }}> VOLTAR AO QG </button>
+          <h2 className="text-[48px] font-[900] uppercase italic leading-none tracking-tighter text-white text-center mb-10">MISSÃO<br/>CUMPRIDA</h2>
+          <div className="grid grid-cols-2 gap-4 w-full max-w-md mb-12">
+             <div className="bg-white/[0.04] p-6 rounded-[28px] border border-white/10 flex flex-col items-center"> <div className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-2">Área</div> <div className="text-2xl font-[900] italic" style={{ color: user?.color }}>{summary.areaM2} m²</div> </div>
+             <div className="bg-white/[0.04] p-6 rounded-[28px] border border-white/10 flex flex-col items-center"> <div className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-2">XP</div> <div className="text-2xl font-[900] italic text-emerald-400">+{summary.xpGained}</div> </div>
+          </div>
+          <p className="italic text-white/60 text-base text-center max-w-sm mb-16 leading-relaxed px-4">"{summary.report}"</p>
+          <button className="w-full max-w-sm bg-blue-600 py-6 rounded-[32px] font-[900] text-xl uppercase italic shadow-2xl active:scale-95 transition-all" onClick={() => { setView(AppState.HOME); setShowConfetti(false); }}> RETORNAR AO QG </button>
+        </div>
+      )}
+      {view === AppState.LOGIN && (
+        <div className="absolute inset-0 bg-black z-[200] flex flex-col items-center justify-center p-8 overflow-y-auto">
+          <div className="mb-14 text-center animate-pulse">
+            <div className="w-24 h-24 bg-blue-600 rounded-[32px] mx-auto mb-8 flex items-center justify-center shadow-[0_0_80px_rgba(37,99,235,0.5)] border-t border-white/30">
+              <Radio size={48} className="text-white" />
+            </div>
+            <h1 className="text-7xl font-[900] italic tracking-tighter uppercase leading-none text-white">DOMINA</h1>
+            <p className="text-[11px] font-black text-blue-400 tracking-[0.5em] mt-4">TERRITORY DEFENSE SYSTEM</p>
+          </div>
+          <div className="w-full max-w-xs space-y-4">
+            {loginError && <div className="bg-red-500/10 border border-red-500/30 p-5 rounded-[24px] text-[12px] text-red-400 uppercase font-black flex items-center gap-3 animate-bounce"> <AlertCircle size={18} /> {loginError} </div>}
+            <div className="space-y-2">
+              <input type="text" placeholder="CODINOME AGENTE" className="w-full bg-white/[0.03] border border-white/10 rounded-[20px] px-6 py-5 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/10 transition-all" value={loginNickname} onChange={(e) => setLoginNickname(e.target.value)} />
+              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-white/[0.03] border border-white/10 rounded-[20px] px-6 py-5 font-black uppercase text-white outline-none focus:border-blue-500 italic placeholder:text-white/10 transition-all" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => handleAuth('login')} disabled={isSyncing} className="flex-1 bg-white text-black py-5 rounded-[24px] font-black uppercase italic flex items-center justify-center gap-2 active:scale-95 transition-all text-sm"> <LogIn size={18} /> ACESSAR </button>
+              <button onClick={() => handleAuth('register')} disabled={isSyncing} className="flex-1 bg-blue-600 text-white py-5 rounded-[24px] font-black uppercase italic flex items-center justify-center gap-2 active:scale-95 transition-all border-t border-white/20 text-sm shadow-xl"> <UserPlus size={18} /> RECRUTAR </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
