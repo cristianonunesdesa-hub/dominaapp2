@@ -75,12 +75,13 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Lógica de captura desacoplada da renderização de mapa (Gatilhada apenas em movimento real)
     if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
       const points = currentActivity.points;
       const lastPoint = points[points.length - 1];
       if (lastPoint) {
         const d = calculateDistance(lastPoint, userLocation);
-        if (d > 0.8) {
+        if (d > 1.2) { // Incremento mínimo para processamento tático
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
           

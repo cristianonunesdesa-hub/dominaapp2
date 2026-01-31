@@ -19,7 +19,11 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
-  const canvasLayerRef = useRef<L.Canvas | null>(null);
+  
+  // Dois renderizadores de Canvas independentes para performance máxima
+  const territoryCanvasRef = useRef<L.Canvas | null>(null);
+  const trailCanvasRef = useRef<L.Canvas | null>(null);
+  
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
   const mapId = 'dmn-tactical-map';
@@ -45,31 +49,38 @@ const GameMap: React.FC<GameMapProps> = ({
         className: 'map-tiles'
       }).addTo(mapRef.current);
 
-      // Renderer para o efeito "Liquid Territory" - O segredo da suavidade está aqui
-      canvasLayerRef.current = L.canvas({ 
+      // 1. Canvas para Território (Líquido/Plasma)
+      territoryCanvasRef.current = L.canvas({ 
         padding: 0.5,
         className: 'territory-liquid-engine' 
+      }).addTo(mapRef.current);
+
+      // 2. Canvas para Trilha (Nítido/Performance)
+      trailCanvasRef.current = L.canvas({
+        padding: 0.1,
+        className: 'tactical-trail-engine'
       }).addTo(mapRef.current);
 
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', 
-        weight: 6, 
-        opacity: 0.8,
+        weight: 5, 
+        opacity: 0.9,
         lineCap: 'round',
-        lineJoin: 'round'
+        lineJoin: 'round',
+        renderer: trailCanvasRef.current // Usa o canvas nítido
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => { if (onMapClickRef.current) onMapClickRef.current(e.latlng.lat, e.latlng.lng); });
     }
   }, []);
 
+  // Renderização de Territórios (Otimizada via Canvas Layer 1)
   useEffect(() => {
     if (!mapRef.current || !territoryGroupRef.current) return;
     territoryGroupRef.current.clearLayers();
 
-    // Renderizamos cada célula como um círculo de influência para o efeito Metaball
     (Object.values(cells) as Cell[]).forEach((cell) => {
       const activeOwner = users[cell.ownerId || ''];
       const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
@@ -78,10 +89,9 @@ const GameMap: React.FC<GameMapProps> = ({
       const centerLat = parseFloat(latStr);
       const centerLng = parseFloat(lngStr);
 
-      // Usamos círculos com raio ligeiramente maior que a grid para fusão perfeita
       L.circle([centerLat, centerLng], {
         radius: 10,
-        renderer: canvasLayerRef.current,
+        renderer: territoryCanvasRef.current!, // Usa o canvas com filtro líquido
         stroke: false,
         fillColor: ownerColor,
         fillOpacity: 1, 
@@ -90,6 +100,7 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells, users]);
 
+  // Marcadores de Jogadores (Físico/DOM)
   useEffect(() => {
     if (!mapRef.current) return;
     const updateMarker = (uId: string, lat: number, lng: number, uData: Partial<User>) => {
@@ -117,6 +128,7 @@ const GameMap: React.FC<GameMapProps> = ({
     if (userLocation && activeUserId && activeUser) updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
   }, [users, activeUserId, userLocation, activeUser]);
 
+  // Atualização da Trilha Ativa (Canvas Layer 2)
   useEffect(() => { 
     if (activeTrailLayerRef.current) {
       activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng] as L.LatLngTuple));
@@ -129,12 +141,19 @@ const GameMap: React.FC<GameMapProps> = ({
       <style>{`
         .leaflet-container { background: #080808 !important; }
         
-        /* MOTOR DE FLUIDEZ TÁTICA (METABALLS) */
-        /* O segredo da suavidade: Blur alto seguido de Contraste extremo funde os círculos em uma área única */
+        /* MOTOR 1: TERRITÓRIO LÍQUIDO */
         .territory-liquid-engine {
           filter: blur(14px) contrast(450%) brightness(1.1);
           opacity: 0.7;
           mix-blend-mode: screen;
+          pointer-events: none !important;
+          z-index: 400;
+        }
+
+        /* MOTOR 2: TRILHA TÁTICA NÍTIDA */
+        .tactical-trail-engine {
+          filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
+          z-index: 401;
           pointer-events: none !important;
         }
 
