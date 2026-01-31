@@ -66,10 +66,8 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [user?.id, view]);
 
-  // Gestão de Localização: GPS Real vs Simulação
   useEffect(() => {
     if (isTestMode) {
-      // Se entrar em modo teste e não tiver localização, define uma padrão (SP)
       if (!userLocation) {
         setUserLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now() });
       }
@@ -93,34 +91,41 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (view === AppState.ACTIVE && userLocation && currentActivity && user) {
-      const points = currentActivity.points;
+      const points = [...currentActivity.points];
       const lastPoint = points[points.length - 1];
+      
       if (lastPoint) {
         const d = calculateDistance(lastPoint, userLocation);
-        // Sensibilidade aumentada no modo teste (0.1m) para capturar cliques precisos
-        const threshold = isTestMode ? 0.1 : 1.2;
+        const threshold = isTestMode ? 0.05 : 1.2; // Threshold ainda menor para cliques
         
         if (d > threshold) {
           const newPoints = [...points, userLocation];
           const newFullPath = [...currentActivity.fullPath, userLocation];
           
-          if (newPoints.length > 5) {
+          if (newPoints.length > 3) {
             const pA = newPoints[newPoints.length - 2];
             const pB = newPoints[newPoints.length - 1];
-            for (let i = 0; i < newPoints.length - 5; i++) {
+            
+            // Verificação de interseção para fechar o polígono
+            for (let i = 0; i < newPoints.length - 3; i++) {
               if (segmentsIntersect(pA, pB, newPoints[i], newPoints[i + 1])) {
-                const enclosedIds = getEnclosedCellIds([...newPoints.slice(i), newPoints[i]]);
+                const polygon = [...newPoints.slice(i), newPoints[i]];
+                const enclosedIds = getEnclosedCellIds(polygon);
+                
                 if (enclosedIds.length > 0) {
                   const syncCells: Cell[] = [];
                   enclosedIds.forEach(id => {
-                    const c: Cell = { id, ownerId: user.id, ownerNickname: user.nickname, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 };
-                    syncCells.push(c);
-                    currentActivity.capturedCellIds.add(id);
+                    if (!currentActivity.capturedCellIds.has(id)) {
+                      const c: Cell = { id, ownerId: user.id, ownerNickname: user.nickname, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 };
+                      syncCells.push(c);
+                      currentActivity.capturedCellIds.add(id);
+                    }
                   });
                   syncGlobalState(syncCells); 
+                  // Resetar a trilha de "desenho" mas manter o histórico total no fullPath
                   setCurrentActivity({ 
                     ...currentActivity, 
-                    points: [...newPoints.slice(0, i + 1), userLocation], 
+                    points: [userLocation], 
                     fullPath: newFullPath, 
                     distanceMeters: currentActivity.distanceMeters + d 
                   });
@@ -152,7 +157,6 @@ const App: React.FC = () => {
   };
 
   const startRun = () => {
-    // No modo teste, permitimos iniciar mesmo sem sinal de GPS real detectado
     if (!userLocation && !isTestMode) return alert("Buscando satélites...");
     setView(AppState.TUTORIAL);
   };
@@ -176,21 +180,17 @@ const App: React.FC = () => {
     <div className="relative h-full w-full bg-black overflow-hidden font-sans">
       {showConfetti && <ConfettiEffect />}
       
-      {/* Botão Global de Modo Teste - Posição de Destaque */}
       <button 
         onClick={() => setIsTestMode(!isTestMode)}
-        className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[20px] border shadow-2xl transition-all active:scale-90 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/80 border-white/10 text-white/40'}`}
+        className={`absolute top-[60px] right-6 z-[1000] p-4 rounded-[22px] border shadow-2xl transition-all active:scale-90 ${isTestMode ? 'bg-orange-600 border-white text-white' : 'bg-black/60 border-white/10 text-white/40'}`}
       >
-        <Zap size={24} className={isTestMode ? 'fill-white' : ''} />
+        <Zap size={22} className={isTestMode ? 'fill-white' : ''} />
       </button>
 
-      {/* Banner de Status de Simulação */}
       {isTestMode && (
-        <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md px-6 py-2 rounded-full flex flex-col items-center shadow-2xl border border-white/20">
-           <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-white">SIMULAÇÃO ATIVA</span>
-           </div>
-           <div className="text-[8px] font-bold text-white/70 uppercase">Clique no mapa para se mover</div>
+        <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-[1000] bg-orange-600/90 backdrop-blur-md px-6 py-2 rounded-2xl flex flex-col items-center shadow-2xl border border-white/20">
+           <span className="text-[10px] font-black uppercase tracking-widest text-white">MODO SIMULAÇÃO</span>
+           <div className="text-[8px] font-bold text-white/70 uppercase">Clique no mapa para mover o agente</div>
         </div>
       )}
 
@@ -231,12 +231,12 @@ const App: React.FC = () => {
         <div className="absolute inset-x-0 bottom-0 p-8 z-50">
           <div className="flex justify-between items-end mb-6">
             <div>
-              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Status da Rede</p>
-              <h2 className="text-2xl font-black italic uppercase">{user.nickname}</h2>
+              <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Protocolo Ativo</p>
+              <h2 className="text-2xl font-black italic uppercase leading-none">{user.nickname}</h2>
             </div>
             <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-2">
-              <MapPin size={12} className="text-blue-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Sinal: {userLocation ? 'OK' : 'BUSCANDO'}</span>
+              <div className={`w-2 h-2 rounded-full ${userLocation ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <span className="text-[10px] font-black uppercase tracking-widest">Rede: {userLocation ? 'ONLINE' : 'OFF'}</span>
             </div>
           </div>
           <button 
@@ -250,18 +250,18 @@ const App: React.FC = () => {
 
       {view === AppState.TUTORIAL && (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-[600] flex items-center justify-center p-8">
-          <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-12 border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
-            <div className="flex items-start gap-5 mb-10">
-               <div className="w-16 h-16 bg-[#FF3B30] rounded-[22px] flex-shrink-0 flex items-center justify-center font-black italic text-2xl shadow-lg shadow-red-500/20 text-white">DmN</div>
-               <p className="text-[15px] font-bold text-white leading-snug pt-1">
-                 Corra para conquistar o território, feche o polígono para dominar a área interna!
+          <div className="w-full max-w-sm bg-[#121212] rounded-[48px] p-10 border border-white/10 shadow-2xl animate-in zoom-in duration-300">
+            <div className="flex items-start gap-4 mb-8">
+               <div className="w-14 h-14 bg-blue-600 rounded-[20px] flex-shrink-0 flex items-center justify-center font-black italic text-xl shadow-lg text-white">DmN</div>
+               <p className="text-[14px] font-bold text-white/90 leading-tight pt-1 uppercase italic tracking-tight">
+                 Cerque o território. O grid sincroniza quando você fecha o polígono tático.
                </p>
             </div>
             <button 
               onClick={confirmTutorial}
-              className="w-full bg-white text-black py-6 rounded-[28px] font-[900] uppercase text-xl tracking-wide shadow-xl active:scale-95 transition-all"
+              className="w-full bg-white text-black py-5 rounded-[24px] font-black uppercase text-lg italic tracking-tighter shadow-xl active:scale-95 transition-all"
             >
-              ENTENDIDO
+              INICIAR PROTOCOLO
             </button>
           </div>
         </div>
