@@ -59,18 +59,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await client.query('COMMIT');
 
-    // Radar de 10 minutos para garantir visibilidade estável
+    // Radar de 10 minutos para usuários ATIVOS no mapa
     const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
     const { rows: activeUsers } = await client.query(
       "SELECT id, nickname, color, avatar_url as \"avatarUrl\", last_lat as lat, last_lng as lng, xp, level, total_area_m2 as \"totalAreaM2\" FROM users WHERE last_seen > $1",
       [tenMinutesAgo]
     );
 
-    const { rows: allCells } = await client.query("SELECT id, owner_id as \"ownerId\", owner_nickname as \"ownerNickname\", updated_at as \"updatedAt\" FROM cells");
+    // Busca todas as células com os dados dos proprietários (mesmo offline)
+    const { rows: cellsWithOwners } = await client.query(`
+      SELECT 
+        c.id, 
+        c.owner_id as "ownerId", 
+        u.nickname as "ownerNickname", 
+        u.color as "ownerColor", 
+        u.avatar_url as "ownerAvatarUrl",
+        c.updated_at as "updatedAt" 
+      FROM cells c
+      LEFT JOIN users u ON c.owner_id = u.id
+    `);
 
     res.status(200).json({
       users: activeUsers,
-      cells: allCells.reduce((acc: any, cell: any) => {
+      cells: cellsWithOwners.reduce((acc: any, cell: any) => {
         acc[cell.id] = cell;
         return acc;
       }, {})

@@ -9,7 +9,7 @@ interface GameMapProps {
   cells: Record<string, Cell>;
   users: Record<string, User>;
   activeUserId: string;
-  activeUser: User | null; // Adicionado para ter acesso imediato aos dados do jogador local
+  activeUser: User | null;
   currentPath: Point[]; 
   activeTrail?: Point[]; 
   showLoopPreview?: boolean;
@@ -114,38 +114,42 @@ const GameMap: React.FC<GameMapProps> = ({
     territoryGroupRef.current.clearLayers();
     labelGroupRef.current.clearLayers();
 
-    // Mostra identidade em zooms altos para evitar poluição visual
-    const showIdentity = zoomLevel >= 19;
+    // Reduzi para 18 para as etiquetas aparecerem mais cedo
+    const showIdentity = zoomLevel >= 18;
 
-    (Object.values(cells) as Cell[]).forEach((cell: Cell) => {
-      const owner = users[cell.ownerId || ''];
-      const fillColor = owner ? owner.color : '#444444';
+    (Object.values(cells) as any[]).forEach((cell) => {
+      // Prioridade: info vindo diretamente na célula (Sync robusto) ou info vindo da lista de usuários ativos
+      const activeOwner = users[cell.ownerId || ''];
+      const ownerNickname = cell.ownerNickname || activeOwner?.nickname;
+      const ownerColor = cell.ownerColor || activeOwner?.color || '#444444';
+      const ownerAvatarUrl = cell.ownerAvatarUrl || activeOwner?.avatarUrl;
+
       const b = getCellBounds(cell.id);
       const leafletBounds: L.LatLngExpression[] = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
       
       L.polygon(leafletBounds, {
         renderer: canvasLayerRef.current,
         stroke: false,
-        fillColor: fillColor,
-        fillOpacity: owner ? 0.6 : 0.3,
+        fillColor: ownerColor,
+        fillOpacity: cell.ownerId ? 0.6 : 0.3,
         interactive: false
       }).addTo(territoryGroupRef.current!);
 
-      if (showIdentity && owner) {
+      if (showIdentity && ownerNickname) {
         const centerLat = (b[0] + b[2]) / 2;
         const centerLng = (b[1] + b[3]) / 2;
         
-        // Renderiza Nickname e Avatar dentro da célula
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'cell-identity-label',
             html: `
-              <div class="flex flex-col items-center justify-center scale-[0.4] origin-center">
+              <div class="flex flex-col items-center justify-center scale-[0.35] origin-center opacity-80">
+                ${ownerAvatarUrl ? `
                 <div class="w-10 h-10 rounded-full border-2 border-white/50 overflow-hidden shadow-lg bg-black">
-                  <img src="${owner.avatarUrl}" class="w-full h-full object-cover" />
-                </div>
+                  <img src="${ownerAvatarUrl}" class="w-full h-full object-cover" />
+                </div>` : ''}
                 <div class="mt-1 px-2 py-0.5 bg-black/60 rounded backdrop-blur-sm border border-white/10 whitespace-nowrap">
-                   <span class="text-[12px] font-black uppercase tracking-tighter text-white">${owner.nickname}</span>
+                   <span class="text-[12px] font-black uppercase tracking-tighter text-white">${ownerNickname}</span>
                 </div>
               </div>
             `,
@@ -187,17 +191,14 @@ const GameMap: React.FC<GameMapProps> = ({
         playerMarkersRef.current[uId].setLatLng(pos);
       }
 
-      // Se for o eu, centraliza instantaneamente ou com duração mínima para acompanhar a "maninhada"
       if (isMe) mapRef.current?.panTo(pos, { animate: true, duration: 0.05 });
     };
 
-    // Atualiza outros jogadores
     (Object.values(users) as User[]).forEach(u => {
       if (u.id === activeUserId || !u.lat || !u.lng) return;
       updateMarker(u.id, u.lat, u.lng, u);
     });
 
-    // Atualiza o EU com dados locais imediatos para evitar lag visual
     if (userLocation && activeUserId && activeUser) {
       updateMarker(activeUserId, userLocation.lat, userLocation.lng, activeUser);
     }

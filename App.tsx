@@ -15,6 +15,16 @@ import { Trophy, User as UserIcon, Zap, CheckCircle2, Radio, Lock, AlertCircle, 
 const CLOSE_LOOP_THRESHOLD_METERS = 35; 
 const LEVEL_XP_STEP = 1000;
 
+// Função simples para gerar um hash do nickname e escolher uma cor única
+const getDeterministicColor = (nickname: string) => {
+  let hash = 0;
+  for (let i = 0; i < nickname.length; i++) {
+    hash = nickname.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % TACTICAL_COLORS.length;
+  return TACTICAL_COLORS[index];
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
@@ -64,6 +74,7 @@ const App: React.FC = () => {
         setCells(prev => {
           const merged = { ...prev };
           Object.keys(data.cells).forEach(id => {
+            // Se a célula já for minha localmente, não deixo o Sync sobrescrever
             if (merged[id]?.ownerId === user.id) return;
             merged[id] = data.cells[id];
           });
@@ -228,10 +239,8 @@ const App: React.FC = () => {
     if (loginPassword.length < 4) return setLoginError("Senha deve ter 4+ caracteres.");
     setIsSyncing(true);
     
-    // Escolhe uma cor distinta se for registro
-    const selectedColor = action === 'register' 
-      ? TACTICAL_COLORS[Math.floor(Math.random() * TACTICAL_COLORS.length)] 
-      : COLORS.PRIMARY;
+    // Cor única para cada nome de usuário
+    const selectedColor = getDeterministicColor(loginNickname.toLowerCase().trim());
 
     try {
       const res = await fetch('/api/auth', {
