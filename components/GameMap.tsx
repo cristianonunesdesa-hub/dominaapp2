@@ -27,7 +27,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
   const targetMarkerRef = useRef<L.Marker | null>(null);
   const simLineRef = useRef<L.Polyline | null>(null);
-  const driftIntervalRef = useRef<number | null>(null);
+  const hasZoomedInRef = useRef(false);
   
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => {
@@ -36,12 +36,17 @@ const GameMap: React.FC<GameMapProps> = ({
 
   useEffect(() => {
     if (!mapRef.current) {
+      // Inicia em zoom baixo (alto no céu) se estiver em modo intro
+      const initialZoom = introMode ? 11 : 17;
+      const initialCenter: L.LatLngExpression = [userLocation?.lat || -23.5505, userLocation?.lng || -46.6333];
+
       mapRef.current = L.map('dmn-tactical-map', {
         zoomControl: false, 
         attributionControl: false, 
         preferCanvas: true,
-        inertia: true
-      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 17);
+        inertia: true,
+        zoomSnap: 0.1
+      }).setView(initialCenter, initialZoom);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 20, 
@@ -82,29 +87,39 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
-  // Efeito de Drift Cinematográfico (Intro)
+  // Efeito de Entrada Satélite (Intro Fly-In)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !userLocation) return;
 
-    if (introMode) {
-      const startDrift = () => {
-        // Movimento aleatório suave para simular drone/satélite
-        const x = (Math.random() - 0.5) * 150;
-        const y = (Math.random() - 0.5) * 150;
-        map.panBy([x, y], { animate: true, duration: 25, easeLinearity: 1 });
-      };
+    if (introMode && !hasZoomedInRef.current) {
+      hasZoomedInRef.current = true;
+      // FlyTo majestoso: do espaço para o chão
+      map.flyTo([userLocation.lat, userLocation.lng], 18, {
+        duration: 4,
+        easeLinearity: 0.25,
+        noMoveStart: true
+      });
       
-      startDrift();
-      const interval = window.setInterval(startDrift, 25000);
-      return () => clearInterval(interval);
-    } else {
-      // Quando sai do modo intro, volta suavemente para o player
-      if (userLocation) {
-        map.flyTo([userLocation.lat, userLocation.lng], 17, { duration: 2 });
+      // Inicia um drift muito leve após o flyTo para manter o mapa "vivo"
+      setTimeout(() => {
+        if (introMode && mapRef.current) {
+          mapRef.current.panBy([40, 40], { animate: true, duration: 30, easeLinearity: 1 });
+        }
+      }, 4500);
+    } else if (!introMode) {
+      // Modo normal: segue o player
+      map.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+      if (map.getZoom() < 17) {
+        map.setZoom(17, { animate: true });
       }
     }
   }, [introMode, userLocation]);
+
+  // Reseta o controle de zoom quando o componente for remontado ou o modo mudar drasticamente
+  useEffect(() => {
+    if (!introMode) hasZoomedInRef.current = false;
+  }, [introMode]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -131,7 +146,7 @@ const GameMap: React.FC<GameMapProps> = ({
   }, [simTarget, userLocation]);
 
   useEffect(() => {
-    if (!mapRef.current || introMode) return; // Não foca durante intro
+    if (!mapRef.current || introMode) return; 
 
     if (userLocation && activeUser) {
       const id = activeUserId;
@@ -181,10 +196,6 @@ const GameMap: React.FC<GameMapProps> = ({
         delete playerMarkersRef.current[id];
       }
     });
-
-    if (userLocation && !introMode) {
-      mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
-    }
   }, [users, userLocation, activeUserId, activeUser, introMode]);
 
   useEffect(() => {
