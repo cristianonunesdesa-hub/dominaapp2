@@ -3,7 +3,6 @@ import { Pool } from "pg";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const dbUrl = process.env.DATABASE_URL;
-
 let pool: Pool | null = null;
 
 const getPool = () => {
@@ -17,6 +16,10 @@ const getPool = () => {
 };
 
 const ensureTables = async (client: any) => {
+  // ATENÇÃO: Descomente as linhas de TRUNCATE abaixo apenas se precisar "zerar" o banco manualmente
+  // await client.query("TRUNCATE TABLE cells;");
+  // await client.query("TRUNCATE TABLE users;");
+  
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -41,37 +44,29 @@ const ensureTables = async (client: any) => {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  
-  if (!dbUrl) {
-    return res.status(500).json({ error: "DATABASE_URL não configurada." });
-  }
+  if (!dbUrl) return res.status(500).json({ error: "DATABASE_URL não configurada." });
 
-  const { userId, nickname, color, location, newCells, stats } = req.body;
+  const { userId, location, newCells, stats } = req.body;
   const client = await getPool().connect();
 
   try {
     await ensureTables(client);
     await client.query('BEGIN');
 
-    // UPSERT do usuário: Cria se não existir (para os mocks) ou atualiza status
+    // Atualiza apenas usuários que JÁ existem (criados via auth)
     if (userId) {
       await client.query(`
-        INSERT INTO users (id, nickname, color, last_lat, last_lng, last_seen, xp, level, total_area_m2, cells_owned)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        ON CONFLICT (id) DO UPDATE SET 
-          nickname = EXCLUDED.nickname,
-          color = EXCLUDED.color,
-          last_lat = EXCLUDED.last_lat,
-          last_lng = EXCLUDED.last_lng,
-          last_seen = EXCLUDED.last_seen,
-          xp = EXCLUDED.xp,
-          level = EXCLUDED.level,
-          total_area_m2 = EXCLUDED.total_area_m2,
-          cells_owned = EXCLUDED.cells_owned
+        UPDATE users SET 
+          last_lat = $2, 
+          last_lng = $3, 
+          last_seen = $4,
+          xp = $5,
+          level = $6,
+          total_area_m2 = $7,
+          cells_owned = $8
+        WHERE id = $1
       `, [
         userId, 
-        nickname || 'AGENTE ANONIMO', 
-        color || '#3B82F6', 
         location?.lat || null, 
         location?.lng || null, 
         Date.now(), 
@@ -119,7 +114,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err: any) {
     await client.query('ROLLBACK');
-    console.error("Sync Database Error:", err.message);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
