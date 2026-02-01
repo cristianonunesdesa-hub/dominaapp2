@@ -36,8 +36,8 @@ const GameMap: React.FC<GameMapProps> = ({
 
   useEffect(() => {
     if (!mapRef.current) {
-      // Inicia em zoom baixo (alto no céu) se estiver em modo intro
-      const initialZoom = introMode ? 11 : 17;
+      // Inicia em zoom 12 (~10km de cobertura) se estiver em modo intro
+      const initialZoom = introMode ? 12 : 17;
       const initialCenter: L.LatLngExpression = [userLocation?.lat || -23.5505, userLocation?.lng || -46.6333];
 
       mapRef.current = L.map('dmn-tactical-map', {
@@ -94,19 +94,19 @@ const GameMap: React.FC<GameMapProps> = ({
 
     if (introMode && !hasZoomedInRef.current) {
       hasZoomedInRef.current = true;
-      // FlyTo majestoso: do espaço para o chão
+      // FlyTo majestoso: dos ~10km de altura para o chão
       map.flyTo([userLocation.lat, userLocation.lng], 18, {
-        duration: 4,
-        easeLinearity: 0.25,
+        duration: 4.5,
+        easeLinearity: 0.2,
         noMoveStart: true
       });
       
       // Inicia um drift muito leve após o flyTo para manter o mapa "vivo"
       setTimeout(() => {
         if (introMode && mapRef.current) {
-          mapRef.current.panBy([40, 40], { animate: true, duration: 30, easeLinearity: 1 });
+          mapRef.current.panBy([50, 50], { animate: true, duration: 35, easeLinearity: 1 });
         }
-      }, 4500);
+      }, 5000);
     } else if (!introMode) {
       // Modo normal: segue o player
       map.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });

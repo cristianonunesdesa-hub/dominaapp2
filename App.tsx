@@ -12,19 +12,28 @@ import { Radio, Zap, Globe, Activity as ActivityIcon, Navigation, Crosshair, Ter
 import { playVictorySound } from './utils/audio';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppState>(AppState.LOGIN);
+  // CONFIGURAÇÃO DE TESTE: Inicia direto no BOOT
+  const [view, setView] = useState<AppState>(AppState.BOOT);
+  const [user, setUser] = useState<User | null>({
+    id: 'u_dev_agent',
+    nickname: 'AGENTE_ALPHA',
+    color: '#3B82F6',
+    cellsOwned: 42,
+    totalAreaM2: 1890,
+    xp: 850,
+    level: 2,
+    badges: ['explorer'],
+    dailyStreak: 3
+  });
+
   const [userLocation, setUserLocation] = useState<Point | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [isTestMode, setIsTestMode] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(true); // Modo simulador ativo por padrão para testes
   const [simSpeed, setSimSpeed] = useState(15); 
   const [simTarget, setSimTarget] = useState<Point | null>(null);
-  const [user, setUser] = useState<User | null>(null);
   const [globalUsers, setGlobalUsers] = useState<Record<string, User>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
-  const [loginNickname, setLoginNickname] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
   const [isIntroReady, setIsIntroReady] = useState(false);
 
   const activityRef = useRef<Activity | null>(null);
@@ -35,18 +44,21 @@ const App: React.FC = () => {
   useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
 
+  // Sequência de Intro Automática ao montar o componente (Pós-Login simulado)
   useEffect(() => {
-    const saved = localStorage.getItem('dmn_user_session');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setUser(parsed);
+    if (view === AppState.BOOT) {
+      const bootTimer = setTimeout(() => {
         setView(AppState.HOME);
-        setIsIntroReady(true);
-      } catch (e) { localStorage.removeItem('dmn_user_session'); }
+        const readyTimer = setTimeout(() => {
+          setIsIntroReady(true);
+        }, 1500); // UI entra em fade após o início do zoom
+        return () => clearTimeout(readyTimer);
+      }, 3000); // 3 segundos de BOOT cinematográfico
+      return () => clearTimeout(bootTimer);
     }
-  }, []);
+  }, [view]);
 
+  // Sincronização e GPS
   const syncGlobalState = useCallback(async (newCells: Cell[] = [], updatedUser?: User) => {
     const activeUser = updatedUser || user;
     if (!activeUser || !userLocationRef.current) return;
@@ -127,6 +139,7 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isTestMode]);
 
+  // Lógica de Atividade
   useEffect(() => {
     const activity = activityRef.current;
     const loc = userLocation;
@@ -134,7 +147,6 @@ const App: React.FC = () => {
       const points = activity.points;
       const lastPoint = points[points.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, loc) : 0;
-      
       const threshold = isTestMode ? 0.25 : 2.5; 
       
       if (d > threshold) {
@@ -153,17 +165,13 @@ const App: React.FC = () => {
                   id, ownerId: user.id, ownerNickname: user.nickname, ownerColor: user.color,
                   bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1
                 }));
-                
                 setCells(prev => ({ ...prev, ...captured.reduce((a, c) => ({...a, [c.id]: c}), {}) }));
                 syncGlobalState(captured);
                 setShowConfetti(true);
                 playVictorySound();
                 setTimeout(() => setShowConfetti(false), 2000);
-                
                 setCurrentActivity(prev => prev ? { 
-                  ...prev, 
-                  points: [loc], 
-                  fullPath: newFullPath,
+                  ...prev, points: [loc], fullPath: newFullPath,
                   capturedCellIds: new Set([...prev.capturedCellIds, ...enclosedIds]) 
                 } : null);
                 return;
@@ -187,38 +195,9 @@ const App: React.FC = () => {
     };
     if (updatedUser.xp >= updatedUser.level * 1000) updatedUser.level += 1;
     setUser(updatedUser);
-    localStorage.setItem('dmn_user_session', JSON.stringify(updatedUser));
     syncGlobalState([], updatedUser);
     setView(AppState.HOME);
     setCurrentActivity(null);
-  };
-
-  const handleAuth = async (action: 'login' | 'register') => {
-    setLoginError(null);
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname: loginNickname, password: loginPassword, action })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro de conexão");
-      const userWithDefaults = {
-        ...data, xp: data.xp || 0, level: data.level || 1, total_area_m2: data.total_area_m2 || 0,
-        cells_owned: data.cells_owned || 0, color: data.color || '#3B82F6'
-      };
-      setUser(userWithDefaults);
-      localStorage.setItem('dmn_user_session', JSON.stringify(userWithDefaults));
-      
-      // Sequência de Intro (BOOT -> HOME)
-      setView(AppState.BOOT);
-      setIsIntroReady(false);
-      setTimeout(() => {
-        setView(AppState.HOME);
-        setTimeout(() => setIsIntroReady(true), 1500); // UI aparece após 1.5s de HOME
-      }, 3000); // 3 segundos de BOOT cinematográfico
-
-    } catch (err: any) { setLoginError(err.message); }
   };
 
   return (
@@ -240,7 +219,7 @@ const App: React.FC = () => {
         />
       </div>
       
-      {/* Botões de Simulador (Ocultos durante Intro) */}
+      {/* HUD Superior (Fade-in) */}
       <div className={`absolute top-12 inset-x-5 z-[2500] flex flex-col gap-2 pointer-events-none transition-opacity duration-1000 ${isIntroReady ? 'opacity-100' : 'opacity-0'}`}>
         <div className="flex justify-between items-start">
           <button 
@@ -253,62 +232,28 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {view === AppState.LOGIN && (
-        <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8 overflow-hidden">
-           <div 
-             className="absolute inset-0 z-[-1] opacity-50 blur-[4px] grayscale-[0.2] brightness-[0.4]"
-             style={{ 
-               backgroundImage: 'url("https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=2000")', 
-               backgroundSize: 'cover', 
-               backgroundPosition: 'center',
-               transform: 'scale(1.1)' 
-             }}
-           ></div>
-           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/90 z-[-1]"></div>
-           <div className="relative mb-6 flex flex-col items-center">
-              <div className="absolute inset-0 bg-blue-600/20 rounded-full blur-3xl animate-pulse"></div>
-              <div className="absolute inset-[-15px] border border-blue-500/30 rounded-full animate-[ping_3s_infinite]"></div>
-              <div className="relative z-10 w-16 h-16 flex items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl rotate-[-15deg] shadow-2xl">
-                 <Footprints size={36} className="text-blue-500 fill-blue-500/20" />
-              </div>
-           </div>
-           <h1 className="text-5xl font-black italic mb-10 tracking-tighter uppercase leading-none relative z-10 text-white drop-shadow-[0_0_10px_rgba(0,0,0,0.5)]">DOMINA</h1>
-           <div className="w-full max-w-xs space-y-4 relative z-10">
-              <div className="space-y-3">
-                <input type="text" placeholder="USUÁRIO" className="w-full bg-[#0a0a0a]/90 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-xs tracking-widest placeholder:text-white/30" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-                <input type="password" placeholder="SENHA" className="w-full bg-[#0a0a0a]/90 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-xs tracking-[0.3em] placeholder:text-white/30" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              </div>
-              {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center mt-1 animate-pulse tracking-wider">{loginError}</p>}
-              <div className="flex gap-3 w-full pt-2">
-                <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-5 rounded-2xl font-black italic uppercase text-xs tracking-widest active:scale-95 transition-all shadow-xl">LOGIN</button>
-                <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black italic uppercase text-xs tracking-widest active:scale-95 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">JOIN</button>
-              </div>
-           </div>
-           <div className="absolute bottom-12 text-center opacity-50"><p className="text-[9px] font-black uppercase tracking-[0.5em] text-white/80 drop-shadow-md">PROTOCOLO TÁTICO DE MOVIMENTO</p></div>
-        </div>
-      )}
-
-      {/* Tela de BOOT (Cinematográfica) */}
+      {/* BOOT Overlay (Sutil) */}
       {view === AppState.BOOT && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[2800] flex flex-col items-center justify-center animate-out fade-out duration-1000">
+        <div className="absolute inset-0 z-[2800] flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px] pointer-events-none animate-out fade-out duration-[2000] delay-[2000]">
            <div className="text-center">
-             <div className="w-1 h-12 bg-blue-600 mx-auto mb-4 animate-bounce"></div>
-             <p className="text-[10px] font-black uppercase tracking-[1em] animate-pulse">Iniciando Link de Satélite</p>
+             <div className="w-[1px] h-16 bg-blue-500 mx-auto mb-6 animate-[bounce_2s_infinite]"></div>
+             <p className="text-[9px] font-black uppercase tracking-[1.5em] text-blue-400 animate-pulse translate-x-[0.75em]">Establishing Link</p>
            </div>
         </div>
       )}
 
+      {/* HOME VIEW (UI Ready) */}
       {view === AppState.HOME && user && (
-        <div className={`absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none transition-all duration-1000 transform ${isIntroReady ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
+        <div className={`absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none transition-all duration-1000 ease-out transform ${isIntroReady ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           <div className="flex justify-between items-center mb-4 pointer-events-auto bg-black/80 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
-            <div className="flex gap-3 items-center" onClick={() => { localStorage.removeItem('dmn_user_session'); setUser(null); setView(AppState.LOGIN); }}>
+            <div className="flex gap-3 items-center">
               <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden shadow-inner">
                 <img src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.nickname}`} className="w-full h-full object-cover" />
               </div>
               <div>
                 <h3 className="font-black italic uppercase text-sm leading-none">{user.nickname}</h3>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">AGENTE NÍVEL {user.level}</span>
+                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter shadow-[0_0_10px_rgba(37,99,235,0.5)]">AGENTE NÍVEL {user.level}</span>
                 </div>
               </div>
             </div>
@@ -323,7 +268,7 @@ const App: React.FC = () => {
                 setView(AppState.ACTIVE); 
                 setCurrentActivity({ id: `act_${Date.now()}`, startTime: Date.now(), points: [userLocation!], fullPath: [userLocation!], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); 
               }} 
-              className="w-full bg-blue-600 py-6 rounded-3xl font-black text-xl italic uppercase shadow-[0_0_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800"
+              className="w-full bg-blue-600 py-6 rounded-3xl font-black text-xl italic uppercase shadow-[0_0_40px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800"
             >
               <ActivityIcon size={24} className="animate-pulse" /> INICIAR INCURSÃO
             </button>
