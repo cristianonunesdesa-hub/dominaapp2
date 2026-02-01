@@ -47,6 +47,7 @@ export interface Activity {
 
 export enum AppState {
   LOGIN = 'LOGIN',
+  BOOT = 'BOOT',
   TUTORIAL = 'TUTORIAL',
   HOME = 'HOME',
   ACTIVE = 'ACTIVE',

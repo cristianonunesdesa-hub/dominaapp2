@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const [loginNickname, setLoginNickname] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isIntroReady, setIsIntroReady] = useState(false);
 
   const activityRef = useRef<Activity | null>(null);
   const userLocationRef = useRef<Point | null>(null);
@@ -41,6 +42,7 @@ const App: React.FC = () => {
         const parsed = JSON.parse(saved);
         setUser(parsed);
         setView(AppState.HOME);
+        setIsIntroReady(true);
       } catch (e) { localStorage.removeItem('dmn_user_session'); }
     }
   }, []);
@@ -207,7 +209,15 @@ const App: React.FC = () => {
       };
       setUser(userWithDefaults);
       localStorage.setItem('dmn_user_session', JSON.stringify(userWithDefaults));
-      setView(AppState.HOME);
+      
+      // Sequência de Intro (BOOT -> HOME)
+      setView(AppState.BOOT);
+      setIsIntroReady(false);
+      setTimeout(() => {
+        setView(AppState.HOME);
+        setTimeout(() => setIsIntroReady(true), 1500); // UI aparece após 1.5s de HOME
+      }, 3000); // 3 segundos de BOOT cinematográfico
+
     } catch (err: any) { setLoginError(err.message); }
   };
 
@@ -226,10 +236,12 @@ const App: React.FC = () => {
           currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []} 
           onMapClick={(lat, lng) => isTestMode && setSimTarget({ lat, lng, timestamp: Date.now() })}
           simTarget={simTarget}
+          introMode={view === AppState.BOOT || (view === AppState.HOME && !isIntroReady)}
         />
       </div>
       
-      <div className="absolute top-12 inset-x-5 z-[2500] flex flex-col gap-2 pointer-events-none">
+      {/* Botões de Simulador (Ocultos durante Intro) */}
+      <div className={`absolute top-12 inset-x-5 z-[2500] flex flex-col gap-2 pointer-events-none transition-opacity duration-1000 ${isIntroReady ? 'opacity-100' : 'opacity-0'}`}>
         <div className="flex justify-between items-start">
           <button 
             onClick={() => { setIsTestMode(!isTestMode); setSimTarget(null); }} 
@@ -243,85 +255,51 @@ const App: React.FC = () => {
 
       {view === AppState.LOGIN && (
         <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8 overflow-hidden">
-           {/* IMAGEM DE FUNDO - CASAL EM MOVIMENTO (OFUSCADA) */}
            <div 
-             className="absolute inset-0 z-[-1] opacity-30 blur-[10px] grayscale-[0.3] brightness-[0.2]"
+             className="absolute inset-0 z-[-1] opacity-50 blur-[4px] grayscale-[0.2] brightness-[0.4]"
              style={{ 
-               backgroundImage: 'url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=2000")', 
+               backgroundImage: 'url("https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=2000")', 
                backgroundSize: 'cover', 
                backgroundPosition: 'center',
-               transform: 'scale(1.15)' 
+               transform: 'scale(1.1)' 
              }}
            ></div>
-           
-           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black z-[-1]"></div>
-
-           {/* ÍCONE DE PEGADA COM SINAL DE RADAR ACIMA DO TÍTULO */}
+           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/90 z-[-1]"></div>
            <div className="relative mb-6 flex flex-col items-center">
-              <div className="absolute inset-0 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
-              {/* Círculos de Radar Pulsantes */}
-              <div className="absolute w-12 h-12 border border-blue-500/40 rounded-full animate-[ping_2.5s_infinite]"></div>
-              <div className="absolute w-16 h-16 border border-blue-500/20 rounded-full animate-[ping_3.5s_infinite]"></div>
-              <div className="absolute w-20 h-20 border border-blue-500/10 rounded-full animate-[ping_4.5s_infinite]"></div>
-              
-              {/* Pegada Central */}
-              <div className="relative z-10 w-14 h-14 flex items-center justify-center bg-black/40 backdrop-blur-lg border border-white/5 rounded-2xl rotate-[-15deg]">
-                 <Footprints size={32} className="text-blue-500 fill-blue-500/10" />
+              <div className="absolute inset-0 bg-blue-600/20 rounded-full blur-3xl animate-pulse"></div>
+              <div className="absolute inset-[-15px] border border-blue-500/30 rounded-full animate-[ping_3s_infinite]"></div>
+              <div className="relative z-10 w-16 h-16 flex items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl rotate-[-15deg] shadow-2xl">
+                 <Footprints size={36} className="text-blue-500 fill-blue-500/20" />
               </div>
            </div>
-           
-           <h1 className="text-5xl font-black italic mb-12 tracking-tighter uppercase leading-none relative z-10 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
-              DOMINA
-           </h1>
-
+           <h1 className="text-5xl font-black italic mb-10 tracking-tighter uppercase leading-none relative z-10 text-white drop-shadow-[0_0_10px_rgba(0,0,0,0.5)]">DOMINA</h1>
            <div className="w-full max-w-xs space-y-4 relative z-10">
               <div className="space-y-3">
-                <input 
-                  type="text" 
-                  placeholder="USUÁRIO" 
-                  className="w-full bg-[#0d0d0d]/80 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-[10px] tracking-[0.2em] placeholder:text-white/20" 
-                  value={loginNickname} 
-                  onChange={e => setLoginNickname(e.target.value)} 
-                />
-                <input 
-                  type="password" 
-                  placeholder="SENHA" 
-                  className="w-full bg-[#0d0d0d]/80 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-[10px] tracking-[0.2em] placeholder:text-white/20" 
-                  value={loginPassword} 
-                  onChange={e => setLoginPassword(e.target.value)} 
-                />
+                <input type="text" placeholder="USUÁRIO" className="w-full bg-[#0a0a0a]/90 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-xs tracking-widest placeholder:text-white/30" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+                <input type="password" placeholder="SENHA" className="w-full bg-[#0a0a0a]/90 border border-white/10 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-xs tracking-[0.3em] placeholder:text-white/30" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
               </div>
-
-              {loginError && (
-                <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-pulse tracking-wider">
-                  {loginError}
-                </p>
-              )}
-
-              <div className="flex gap-3 w-full pt-4">
-                <button 
-                  onClick={() => handleAuth('login')} 
-                  className="flex-1 bg-white text-black py-5 rounded-2xl font-black italic uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-xl"
-                >
-                  LOGIN
-                </button>
-                <button 
-                  onClick={() => handleAuth('register')} 
-                  className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black italic uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
-                >
-                  JOIN
-                </button>
+              {loginError && <p className="text-red-500 text-[10px] font-black uppercase text-center mt-1 animate-pulse tracking-wider">{loginError}</p>}
+              <div className="flex gap-3 w-full pt-2">
+                <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black py-5 rounded-2xl font-black italic uppercase text-xs tracking-widest active:scale-95 transition-all shadow-xl">LOGIN</button>
+                <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black italic uppercase text-xs tracking-widest active:scale-95 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]">JOIN</button>
               </div>
            </div>
-           
-           <div className="absolute bottom-16 text-center opacity-40">
-              <p className="text-[8px] font-black uppercase tracking-[0.6em] text-white/50">PROTOCOLO TÁTICO DE MOVIMENTO</p>
+           <div className="absolute bottom-12 text-center opacity-50"><p className="text-[9px] font-black uppercase tracking-[0.5em] text-white/80 drop-shadow-md">PROTOCOLO TÁTICO DE MOVIMENTO</p></div>
+        </div>
+      )}
+
+      {/* Tela de BOOT (Cinematográfica) */}
+      {view === AppState.BOOT && (
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-[2800] flex flex-col items-center justify-center animate-out fade-out duration-1000">
+           <div className="text-center">
+             <div className="w-1 h-12 bg-blue-600 mx-auto mb-4 animate-bounce"></div>
+             <p className="text-[10px] font-black uppercase tracking-[1em] animate-pulse">Iniciando Link de Satélite</p>
            </div>
         </div>
       )}
 
       {view === AppState.HOME && user && (
-        <div className="absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none">
+        <div className={`absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none transition-all duration-1000 transform ${isIntroReady ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
           <div className="flex justify-between items-center mb-4 pointer-events-auto bg-black/80 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
             <div className="flex gap-3 items-center" onClick={() => { localStorage.removeItem('dmn_user_session'); setUser(null); setView(AppState.LOGIN); }}>
               <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden shadow-inner">
@@ -347,7 +325,7 @@ const App: React.FC = () => {
               }} 
               className="w-full bg-blue-600 py-6 rounded-3xl font-black text-xl italic uppercase shadow-[0_0_30px_rgba(37,99,235,0.4)] active:scale-95 transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800"
             >
-              <ActivityIcon size={24} /> INICIAR CONQUISTA
+              <ActivityIcon size={24} className="animate-pulse" /> INICIAR INCURSÃO
             </button>
           </div>
         </div>

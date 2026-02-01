@@ -13,10 +13,11 @@ interface GameMapProps {
   activeTrail?: Point[]; 
   onMapClick?: (lat: number, lng: number) => void;
   simTarget?: Point | null;
+  introMode?: boolean;
 }
 
 const GameMap: React.FC<GameMapProps> = ({ 
-  userLocation, cells, users, activeUserId, activeUser, currentPath = [], activeTrail = [], onMapClick, simTarget
+  userLocation, cells, users, activeUserId, activeUser, currentPath = [], activeTrail = [], onMapClick, simTarget, introMode = false
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
@@ -26,6 +27,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const playerMarkersRef = useRef<Record<string, L.Marker>>({});
   const targetMarkerRef = useRef<L.Marker | null>(null);
   const simLineRef = useRef<L.Polyline | null>(null);
+  const driftIntervalRef = useRef<number | null>(null);
   
   const onMapClickRef = useRef(onMapClick);
   useEffect(() => {
@@ -53,16 +55,13 @@ const GameMap: React.FC<GameMapProps> = ({
       
       territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
 
-      // ROTA COMPLETA (Histórico da Missão) - Agora sólida e visível
       fullPathLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', 
         weight: 3, 
         opacity: 0.4, 
-        dashArray: null, // Linha sólida para persistência
         lineCap: 'round'
       }).addTo(mapRef.current);
 
-      // TRILHA QUENTE (Ativa para Captura) - Destaque Neon
       activeTrailLayerRef.current = L.polyline([], {
         color: activeUser?.color || '#FFFFFF', 
         weight: 8, 
@@ -82,6 +81,30 @@ const GameMap: React.FC<GameMapProps> = ({
       });
     }
   }, []);
+
+  // Efeito de Drift Cinematográfico (Intro)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (introMode) {
+      const startDrift = () => {
+        // Movimento aleatório suave para simular drone/satélite
+        const x = (Math.random() - 0.5) * 150;
+        const y = (Math.random() - 0.5) * 150;
+        map.panBy([x, y], { animate: true, duration: 25, easeLinearity: 1 });
+      };
+      
+      startDrift();
+      const interval = window.setInterval(startDrift, 25000);
+      return () => clearInterval(interval);
+    } else {
+      // Quando sai do modo intro, volta suavemente para o player
+      if (userLocation) {
+        map.flyTo([userLocation.lat, userLocation.lng], 17, { duration: 2 });
+      }
+    }
+  }, [introMode, userLocation]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -108,7 +131,7 @@ const GameMap: React.FC<GameMapProps> = ({
   }, [simTarget, userLocation]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || introMode) return; // Não foca durante intro
 
     if (userLocation && activeUser) {
       const id = activeUserId;
@@ -159,10 +182,10 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     });
 
-    if (userLocation) {
+    if (userLocation && !introMode) {
       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
     }
-  }, [users, userLocation, activeUserId, activeUser]);
+  }, [users, userLocation, activeUserId, activeUser, introMode]);
 
   useEffect(() => {
     if (!territoryGroupRef.current) return;
