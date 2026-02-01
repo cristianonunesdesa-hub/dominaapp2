@@ -8,7 +8,7 @@ import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
 import Leaderboard from './components/Leaderboard';
 import MissionSummary from './components/MissionSummary';
-import { Radio, Zap, Globe, Activity as ActivityIcon, Navigation, Crosshair, Terminal } from 'lucide-react';
+import { Radio, Zap, Globe, Activity as ActivityIcon, Navigation, Crosshair, Terminal, Footprints } from 'lucide-react';
 import { playVictorySound } from './utils/audio';
 
 const App: React.FC = () => {
@@ -200,7 +200,7 @@ const App: React.FC = () => {
         body: JSON.stringify({ nickname: loginNickname, password: loginPassword, action })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Connection Failed");
+      if (!res.ok) throw new Error(data.error || "Erro de conexão");
       const userWithDefaults = {
         ...data, xp: data.xp || 0, level: data.level || 1, total_area_m2: data.total_area_m2 || 0,
         cells_owned: data.cells_owned || 0, color: data.color || '#3B82F6'
@@ -238,55 +238,84 @@ const App: React.FC = () => {
             <Zap size={18} className={isTestMode ? 'fill-white animate-pulse' : ''} />
             <span className="text-[10px] font-black uppercase tracking-widest leading-none">{isTestMode ? 'SIMULADOR ATIVO' : 'SINAL GPS REAL'}</span>
           </button>
-
-          {isTestMode && (
-            <div className="pointer-events-auto flex gap-1 bg-black/80 backdrop-blur-md border border-white/10 p-1 rounded-xl shadow-2xl">
-               {[10, 20, 50].map(s => (
-                 <button 
-                  key={s} 
-                  onClick={() => setSimSpeed(s)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all ${simSpeed === s ? 'bg-orange-600 text-white shadow-lg' : 'text-white/30 hover:bg-white/5'}`}
-                 >
-                   {s === 50 ? 'RUN' : s === 20 ? 'JOG' : 'WALK'}
-                 </button>
-               ))}
-            </div>
-          )}
         </div>
       </div>
 
       {view === AppState.LOGIN && (
         <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8 overflow-hidden">
-           {/* IMAGEM DE FUNDO - CASAL CAMINHANDO/CORRENDO */}
+           {/* IMAGEM DE FUNDO - CASAL EM MOVIMENTO (OFUSCADA) */}
            <div 
-             className="absolute inset-0 z-[-1] opacity-50 blur-[5px] grayscale-[0.5] brightness-[0.35]"
+             className="absolute inset-0 z-[-1] opacity-30 blur-[10px] grayscale-[0.3] brightness-[0.2]"
              style={{ 
                backgroundImage: 'url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=2000")', 
                backgroundSize: 'cover', 
                backgroundPosition: 'center',
-               transform: 'scale(1.1)' 
+               transform: 'scale(1.15)' 
              }}
            ></div>
            
-           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 z-[-1]"></div>
+           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black z-[-1]"></div>
 
-           <Radio size={40} className="text-blue-600 mb-4 animate-pulse relative z-10" />
-           <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase leading-none relative z-10">DOMINA</h1>
-           <div className="w-full max-w-xs space-y-3 relative z-10">
-              <div className="relative">
-                <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                <input type="text" placeholder="CODINOME" className="w-full bg-black/50 backdrop-blur-xl border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
-              </div>
-              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-black/50 backdrop-blur-xl border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
-              {loginError && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-bounce">{loginError}</p>}
-              <div className="flex gap-2 w-full pt-2">
-                <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-black italic uppercase text-xs">LOGIN</button>
-                <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 p-4 rounded-xl font-black italic uppercase text-xs">JOIN</button>
+           {/* ÍCONE DE PEGADA COM SINAL DE RADAR ACIMA DO TÍTULO */}
+           <div className="relative mb-6 flex flex-col items-center">
+              <div className="absolute inset-0 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
+              {/* Círculos de Radar Pulsantes */}
+              <div className="absolute w-12 h-12 border border-blue-500/40 rounded-full animate-[ping_2.5s_infinite]"></div>
+              <div className="absolute w-16 h-16 border border-blue-500/20 rounded-full animate-[ping_3.5s_infinite]"></div>
+              <div className="absolute w-20 h-20 border border-blue-500/10 rounded-full animate-[ping_4.5s_infinite]"></div>
+              
+              {/* Pegada Central */}
+              <div className="relative z-10 w-14 h-14 flex items-center justify-center bg-black/40 backdrop-blur-lg border border-white/5 rounded-2xl rotate-[-15deg]">
+                 <Footprints size={32} className="text-blue-500 fill-blue-500/10" />
               </div>
            </div>
            
-           <div className="absolute bottom-8 text-center opacity-30">
-              <p className="text-[8px] font-black uppercase tracking-[0.4em]">Protocolo Tático de Movimento</p>
+           <h1 className="text-5xl font-black italic mb-12 tracking-tighter uppercase leading-none relative z-10 text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+              DOMINA
+           </h1>
+
+           <div className="w-full max-w-xs space-y-4 relative z-10">
+              <div className="space-y-3">
+                <input 
+                  type="text" 
+                  placeholder="USUÁRIO" 
+                  className="w-full bg-[#0d0d0d]/80 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-[10px] tracking-[0.2em] placeholder:text-white/20" 
+                  value={loginNickname} 
+                  onChange={e => setLoginNickname(e.target.value)} 
+                />
+                <input 
+                  type="password" 
+                  placeholder="SENHA" 
+                  className="w-full bg-[#0d0d0d]/80 border border-white/5 p-5 rounded-2xl outline-none focus:border-blue-500/50 transition-all uppercase font-black text-center text-[10px] tracking-[0.2em] placeholder:text-white/20" 
+                  value={loginPassword} 
+                  onChange={e => setLoginPassword(e.target.value)} 
+                />
+              </div>
+
+              {loginError && (
+                <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-pulse tracking-wider">
+                  {loginError}
+                </p>
+              )}
+
+              <div className="flex gap-3 w-full pt-4">
+                <button 
+                  onClick={() => handleAuth('login')} 
+                  className="flex-1 bg-white text-black py-5 rounded-2xl font-black italic uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-xl"
+                >
+                  LOGIN
+                </button>
+                <button 
+                  onClick={() => handleAuth('register')} 
+                  className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black italic uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                >
+                  JOIN
+                </button>
+              </div>
+           </div>
+           
+           <div className="absolute bottom-16 text-center opacity-40">
+              <p className="text-[8px] font-black uppercase tracking-[0.6em] text-white/50">PROTOCOLO TÁTICO DE MOVIMENTO</p>
            </div>
         </div>
       )}
@@ -301,7 +330,7 @@ const App: React.FC = () => {
               <div>
                 <h3 className="font-black italic uppercase text-sm leading-none">{user.nickname}</h3>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">AGENT LVL {user.level}</span>
+                  <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">AGENTE NÍVEL {user.level}</span>
                 </div>
               </div>
             </div>
