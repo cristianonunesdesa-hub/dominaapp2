@@ -1,12 +1,18 @@
 
-export const GRID_SIZE = 0.00006; 
-export const CELL_AREA_M2 = 45; 
-export const ANTI_CHEAT_SPEED_LIMIT_KMH = 25;
+export const GRID_SIZE = 0.00002; 
+export const CELL_AREA_M2 = 5; 
+export const ANTI_CHEAT_SPEED_LIMIT_KMH = 35; // Aumentado para corredores rápidos
 export const XP_PER_KM = 100;
-export const XP_PER_SECTOR = 2; 
+export const XP_PER_SECTOR = 0.5; 
 export const XP_PER_SABOTAGE = 2;
 export const XP_PER_CITADEL = 50;
 export const LEVEL_XP_BASE = 1000;
+
+// Configurações do Pipeline Geoflow™
+export const MIN_MOVE_DISTANCE = 6;    // Mínimo de 6m para registrar novo vértice
+export const MAX_IDLE_TIME = 4000;     // 4s sem movimento força atualização
+export const RDP_EPSILON = 0.000015;   // Tolerância de simplificação (~1.5m)
+export const SNAP_TOLERANCE = 20;      // Proximidade para snap automático em metros (Solicitado: 20m)
 
 export const COLORS = {
   PRIMARY: '#3B82F6', 
@@ -16,10 +22,9 @@ export const COLORS = {
   GOLD: '#F59E0B'
 };
 
-// Paleta expandida para 24 cores táticas (Referência: Estética DmN/Mapbox)
 export const TACTICAL_COLORS = [
-  '#10B981', '#FF5A5F', '#3B82F6', '#FACC15', '#A855F7', '#9CA3AF', '#F97316', '#14B8A6',
-  '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#6366F1', '#D946EF', '#F59E0B', '#2DD4BF',
+  '#3B82F6', '#F59E0B', '#10B981', '#FACC15', '#A855F7', '#9CA3AF', '#F97316', '#14B8A6',
+  '#EC4899', '#06B6D4', '#84CC16', '#F43F5E', '#6366F1', '#D946EF', '#2DD4BF',
   '#FB7185', '#38BDF8', '#A3E635', '#C084FC', '#FB923C', '#4ADE80', '#22D3EE', '#818CF8'
 ];
 

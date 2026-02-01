@@ -4,7 +4,7 @@ import { GRID_SIZE } from './constants';
 export const getCellId = (lat: number, lng: number): string => {
   const iLat = Math.round(lat / GRID_SIZE);
   const iLng = Math.round(lng / GRID_SIZE);
-  return `${(iLat * GRID_SIZE).toFixed(7)}_${(iLng * GRID_SIZE).toFixed(7)}`;
+  return `${(iLat * GRID_SIZE).toFixed(8)}_${(iLng * GRID_SIZE).toFixed(8)}`;
 };
 
 export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: number, lng: number }): number => {
@@ -17,22 +17,72 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-export const segmentsIntersect = (
+// Cálculo de interseção de segmentos para o "Snap" perfeito (Geoflow™)
+export const getIntersection = (
   p1: {lat: number, lng: number}, p2: {lat: number, lng: number}, 
   p3: {lat: number, lng: number}, p4: {lat: number, lng: number}
-): boolean => {
-  const det = (p2.lng - p1.lng) * (p4.lat - p3.lat) - (p2.lat - p1.lat) * (p4.lng - p3.lng);
-  if (det === 0) return false;
-  const lambda = ((p4.lat - p3.lat) * (p4.lng - p1.lng) + (p3.lng - p4.lng) * (p4.lat - p1.lat)) / det;
-  const gamma = ((p1.lat - p2.lat) * (p4.lng - p1.lng) + (p2.lng - p1.lng) * (p4.lat - p1.lat)) / det;
-  return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+): {lat: number, lng: number} | null => {
+  const x1 = p1.lng, y1 = p1.lat;
+  const x2 = p2.lng, y2 = p2.lat;
+  const x3 = p3.lng, y3 = p3.lat;
+  const x4 = p4.lng, y4 = p4.lat;
+
+  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+  if (denom === 0) return null; // Paralelos
+
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+
+  // Intersecção ocorre dentro dos limites dos segmentos
+  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+    return {
+      lat: y1 + ua * (y2 - y1),
+      lng: x1 + ua * (x2 - x1)
+    };
+  }
+  return null;
+};
+
+// Algoritmo Ramer–Douglas–Peucker para simplificação de trilha
+export const simplifyPath = (points: any[], epsilon: number): any[] => {
+  if (points.length <= 2) return points;
+  
+  const findPerpendicularDistance = (p: any, p1: any, p2: any) => {
+    const dx = p2.lng - p1.lng;
+    const dy = p2.lat - p1.lat;
+    if (dx === 0 && dy === 0) return Math.sqrt(Math.pow(p.lng - p1.lng, 2) + Math.pow(p.lat - p1.lat, 2));
+    const t = ((p.lng - p1.lng) * dx + (p.lat - p1.lat) * dy) / (dx * dx + dy * dy);
+    if (t < 0) return Math.sqrt(Math.pow(p.lng - p1.lng, 2) + Math.pow(p.lat - p1.lat, 2));
+    if (t > 1) return Math.sqrt(Math.pow(p.lng - p2.lng, 2) + Math.pow(p.lat - p2.lat, 2));
+    return Math.sqrt(Math.pow(p.lng - (p1.lng + t * dx), 2) + Math.pow(p.lat - (p1.lat + t * dy), 2));
+  };
+
+  let dmax = 0;
+  let index = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = findPerpendicularDistance(points[i], points[0], points[points.length - 1]);
+    if (d > dmax) {
+      index = i;
+      dmax = d;
+    }
+  }
+
+  if (dmax > epsilon) {
+    const left = simplifyPath(points.slice(0, index + 1), epsilon);
+    const right = simplifyPath(points.slice(index), epsilon);
+    return [...left.slice(0, left.length - 1), ...right];
+  } else {
+    return [points[0], points[points.length - 1]];
+  }
 };
 
 export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {lat: number, lng: number}[]) => {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const intersect = ((polygon[i].lng > point.lng) !== (polygon[j].lng > point.lng)) &&
-                      (point.lat < (polygon[j].lat - polygon[i].lat) * (point.lng - polygon[i].lng) / (polygon[j].lng - polygon[i].lng) + polygon[i].lat);
+    const xi = polygon[i].lng, yi = polygon[i].lat;
+    const xj = polygon[j].lng, yj = polygon[j].lat;
+    const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+                      (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -40,25 +90,26 @@ export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {la
 
 export const getEnclosedCellIds = (path: {lat: number, lng: number}[]): string[] => {
   if (path.length < 3) return [];
+  
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
   path.forEach(p => {
     minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
     minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
   });
 
-  // Margem de segurança de 2 grids para garantir captura total
-  const startI = Math.floor(minLat / GRID_SIZE) - 1;
-  const endI = Math.ceil(maxLat / GRID_SIZE) + 1;
-  const startJ = Math.floor(minLng / GRID_SIZE) - 1;
-  const endJ = Math.ceil(maxLng / GRID_SIZE) + 1;
+  const startI = Math.floor(minLat / GRID_SIZE);
+  const endI = Math.ceil(maxLat / GRID_SIZE);
+  const startJ = Math.floor(minLng / GRID_SIZE);
+  const endJ = Math.ceil(maxLng / GRID_SIZE);
 
   const enclosed: string[] = [];
   for (let i = startI; i <= endI; i++) {
     for (let j = startJ; j <= endJ; j++) {
-      const lat = i * GRID_SIZE;
-      const lng = j * GRID_SIZE;
-      if (isPointInPolygon({ lat, lng }, path)) {
-        enclosed.push(getCellId(lat, lng));
+      const cellLat = i * GRID_SIZE;
+      const cellLng = j * GRID_SIZE;
+      // Checa se o centro da célula está dentro do polígono
+      if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
+        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
       }
     }
   }

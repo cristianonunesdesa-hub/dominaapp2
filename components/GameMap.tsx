@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { Cell, User, Point } from '../types';
+import { GRID_SIZE } from '../constants';
 
 interface GameMapProps {
   userLocation: Point | null;
@@ -11,72 +12,46 @@ interface GameMapProps {
   activeUser: User | null;
   currentPath: Point[]; 
   activeTrail?: Point[]; 
-  onMapClick?: (lat: number, lng: number) => void;
-  simTarget?: Point | null;
+  onMapClick?: (lat, lng) => void;
   introMode?: boolean;
 }
 
 const GameMap: React.FC<GameMapProps> = ({ 
-  userLocation, cells, users, activeUserId, activeUser, currentPath = [], activeTrail = [], onMapClick, simTarget, introMode = false
+  userLocation, cells, activeUserId, activeUser, currentPath = [], activeTrail = [], onMapClick, introMode = false
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const fullPathLayerRef = useRef<L.Polyline | null>(null);
-  const territoryCanvasRef = useRef<L.Canvas | null>(null);
   const territoryGroupRef = useRef<L.LayerGroup | null>(null);
-  const playerMarkersRef = useRef<Record<string, L.Marker>>({});
-  const targetMarkerRef = useRef<L.Marker | null>(null);
-  const simLineRef = useRef<L.Polyline | null>(null);
-  const hasZoomedInRef = useRef(false);
-  
+  const playerMarkerRef = useRef<L.Marker | null>(null);
   const onMapClickRef = useRef(onMapClick);
+
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
 
   useEffect(() => {
     if (!mapRef.current) {
-      // Inicia em zoom 12 (~10km de cobertura) se estiver em modo intro
-      const initialZoom = introMode ? 12 : 17;
-      const initialCenter: L.LatLngExpression = [userLocation?.lat || -23.5505, userLocation?.lng || -46.6333];
-
       mapRef.current = L.map('dmn-tactical-map', {
-        zoomControl: false, 
-        attributionControl: false, 
-        preferCanvas: true,
-        inertia: true,
-        zoomSnap: 0.1
-      }).setView(initialCenter, initialZoom);
+        zoomControl: false, attributionControl: false, preferCanvas: true
+      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 18);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20, 
-        className: 'map-tiles'
-      }).addTo(mapRef.current);
-
-      territoryCanvasRef.current = L.canvas({ 
-        padding: 0.1, 
-        className: 'territory-canvas-layer' 
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 21, className: 'map-tiles'
       }).addTo(mapRef.current);
       
-      territoryGroupRef.current = L.layerGroup().addTo(mapRef.current);
+      const territoryPane = mapRef.current.createPane('liquidTerritory');
+      territoryPane.style.zIndex = '400';
+      territoryPane.classList.add('liquid-territory-container');
+      
+      territoryGroupRef.current = L.layerGroup([], { pane: 'liquidTerritory' }).addTo(mapRef.current);
 
       fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', 
-        weight: 3, 
-        opacity: 0.4, 
-        lineCap: 'round'
+        color: activeUser?.color || '#3B82F6', weight: 2, opacity: 0.1, smoothFactor: 3
       }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#FFFFFF', 
-        weight: 8, 
-        opacity: 0.8, 
-        lineCap: 'round', 
-        lineJoin: 'round'
-      }).addTo(mapRef.current);
-
-      simLineRef.current = L.polyline([], {
-        color: '#f97316', weight: 1.5, opacity: 0.4, dashArray: '5, 10'
+        color: activeUser?.color || '#3B82F6', weight: 8, opacity: 0.7, lineCap: 'round', lineJoin: 'round', smoothFactor: 1.2
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => {
@@ -87,171 +62,74 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
-  // Efeito de Entrada Satélite (Intro Fly-In)
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !userLocation) return;
+    if (!territoryGroupRef.current) return;
+    territoryGroupRef.current.clearLayers();
 
-    if (introMode && !hasZoomedInRef.current) {
-      hasZoomedInRef.current = true;
-      // FlyTo majestoso: dos ~10km de altura para o chão
-      map.flyTo([userLocation.lat, userLocation.lng], 18, {
-        duration: 4.5,
-        easeLinearity: 0.2,
-        noMoveStart: true
-      });
+    Object.values(cells).forEach((cell: Cell) => {
+      const [lat, lng] = cell.id.split('_').map(parseFloat);
       
-      // Inicia um drift muito leve após o flyTo para manter o mapa "vivo"
-      setTimeout(() => {
-        if (introMode && mapRef.current) {
-          mapRef.current.panBy([50, 50], { animate: true, duration: 35, easeLinearity: 1 });
-        }
-      }, 5000);
-    } else if (!introMode) {
-      // Modo normal: segue o player
-      map.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
-      if (map.getZoom() < 17) {
-        map.setZoom(17, { animate: true });
-      }
-    }
-  }, [introMode, userLocation]);
-
-  // Reseta o controle de zoom quando o componente for remontado ou o modo mudar drasticamente
-  useEffect(() => {
-    if (!introMode) hasZoomedInRef.current = false;
-  }, [introMode]);
+      // Sempre usar a cor original do dono definida no cadastro/mock
+      // Se não houver dono (neutro), usa um cinza tático
+      const color = cell.ownerColor || '#9CA3AF';
+      
+      L.circle([lat, lng], {
+        radius: 3.5,
+        stroke: false,
+        fillColor: color,
+        fillOpacity: 1,
+        interactive: false,
+        pane: 'liquidTerritory'
+      }).addTo(territoryGroupRef.current!);
+    });
+  }, [cells]); // Removido activeUserId da dependência pois a cor não depende mais de quem está olhando
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    if (targetMarkerRef.current) targetMarkerRef.current.remove();
-    
-    if (simTarget) {
-      targetMarkerRef.current = L.marker([simTarget.lat, simTarget.lng], {
+    if (!mapRef.current || !userLocation) return;
+    if (!playerMarkerRef.current) {
+      playerMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
         icon: L.divIcon({
-          className: 'target-marker',
+          className: 'player-marker-local',
           html: `<div class="relative w-10 h-10 flex items-center justify-center">
-                  <div class="absolute inset-0 border-2 border-orange-500 rounded-full animate-ping opacity-20"></div>
-                  <div class="w-2.5 h-2.5 bg-orange-500 rounded-full shadow-[0_0_12px_#f97316] border border-white/20"></div>
+                  <div class="absolute inset-0 bg-blue-500/40 blur-md rounded-full animate-pulse"></div>
+                  <div class="w-4 h-4 rounded-full bg-white border-2 border-black shadow-lg shadow-blue-500/50"></div>
                 </div>`,
           iconSize: [40, 40], iconAnchor: [20, 20]
         })
       }).addTo(mapRef.current);
-
-      if (userLocation && simLineRef.current) {
-        simLineRef.current.setLatLngs([[userLocation.lat, userLocation.lng], [simTarget.lat, simTarget.lng]]);
-      }
     } else {
-      if (simLineRef.current) simLineRef.current.setLatLngs([]);
-    }
-  }, [simTarget, userLocation]);
-
-  useEffect(() => {
-    if (!mapRef.current || introMode) return; 
-
-    if (userLocation && activeUser) {
-      const id = activeUserId;
-      const color = activeUser.color || '#3B82F6';
-      
-      if (!playerMarkersRef.current[id]) {
-        playerMarkersRef.current[id] = L.marker([userLocation.lat, userLocation.lng], {
-          icon: L.divIcon({
-            className: 'player-marker-local',
-            html: `<div class="relative w-12 h-12 flex items-center justify-center">
-                    <div class="absolute inset-0 bg-white/5 blur-sm rounded-full"></div>
-                    <div class="absolute inset-0 border-2 border-white/20 rounded-full animate-ping"></div>
-                    <div class="w-6 h-6 rounded-full bg-black border-2 border-white flex items-center justify-center relative z-10 shadow-[0_0_15px_rgba(255,255,255,0.4)]">
-                      <div class="w-3 h-3 rounded-full animate-pulse" style="background-color: ${color}"></div>
-                    </div>
-                  </div>`,
-            iconSize: [48, 48], iconAnchor: [24, 24]
-          })
-        }).addTo(mapRef.current!);
-      } else {
-        playerMarkersRef.current[id].setLatLng([userLocation.lat, userLocation.lng]);
-      }
+      playerMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
     }
 
-    Object.values(users).forEach((u: User) => {
-      if (!u.lat || !u.lng || u.id === activeUserId) return;
-      if (!playerMarkersRef.current[u.id]) {
-        playerMarkersRef.current[u.id] = L.marker([u.lat, u.lng], {
-          icon: L.divIcon({
-            className: 'player-marker',
-            html: `<div class="relative w-8 h-8 flex items-center justify-center">
-                    <div class="w-5 h-5 rounded-full bg-black border-2 border-white/40 flex items-center justify-center relative z-10 shadow-xl">
-                      <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${u.color}"></div>
-                    </div>
-                  </div>`,
-            iconSize: [32, 32], iconAnchor: [16, 16]
-          })
-        }).addTo(mapRef.current!);
-      } else {
-        playerMarkersRef.current[u.id].setLatLng([u.lat, u.lng]);
-      }
-    });
-
-    Object.keys(playerMarkersRef.current).forEach((id) => {
-      if (!users[id] && id !== activeUserId) {
-        playerMarkersRef.current[id].remove();
-        delete playerMarkersRef.current[id];
-      }
-    });
-  }, [users, userLocation, activeUserId, activeUser, introMode]);
-
-  useEffect(() => {
-    if (!territoryGroupRef.current) return;
-    territoryGroupRef.current.clearLayers();
-    Object.values(cells).forEach((cell: Cell) => {
-      const isHostile = cell.ownerId !== activeUserId && cell.ownerId !== null;
-      const color = isHostile ? '#EF4444' : (cell.ownerColor || '#3B82F6');
-      const [lat, lng] = cell.id.split('_').map(parseFloat);
-      
-      L.circle([lat, lng], {
-        radius: 26,
-        renderer: territoryCanvasRef.current!, 
-        stroke: true,
-        color: color,
-        weight: 1.5,
-        opacity: 0.8,
-        fillColor: color, 
-        fillOpacity: 0.3 
-      }).addTo(territoryGroupRef.current!);
-    });
-  }, [cells, activeUserId]);
+    if (!introMode) {
+       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+    }
+  }, [userLocation, introMode]);
 
   useEffect(() => { 
-    if (activeTrailLayerRef.current) {
-      activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
-      if (activeUser) activeTrailLayerRef.current.setStyle({ color: activeUser.color });
-    }
+    if (activeTrailLayerRef.current) activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
     if (fullPathLayerRef.current) {
-      fullPathLayerRef.current.setLatLngs(currentPath?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
-      if (activeUser) fullPathLayerRef.current.setStyle({ color: activeUser.color });
+        fullPathLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
+        fullPathLayerRef.current.setLatLngs(currentPath?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
     }
-  }, [activeTrail, currentPath, activeUser]);
+    if (activeTrailLayerRef.current) {
+        activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
+    }
+  }, [activeTrail, currentPath, activeUser?.color]);
 
   return (
     <>
       <style>{`
-        .leaflet-pane.leaflet-overlay-pane {
+        .map-tiles { filter: brightness(0.6) contrast(1.2) saturate(0.2) invert(95%) hue-rotate(180deg); opacity: 0.9; }
+        .liquid-territory-container {
+          filter: blur(8px) contrast(30);
           mix-blend-mode: screen;
-          opacity: 0.95;
-          filter: none !important;
+          opacity: 0.8;
+          pointer-events: none;
         }
-        .map-tiles { 
-          opacity: 0.35; 
-          filter: grayscale(1) invert(1) brightness(0.4) contrast(1.1);
-        }
-        .player-marker-local, .player-marker { 
-          transition: all 0.1s linear; 
-          z-index: 2500 !important; 
-        }
-        .target-marker { 
-          z-index: 2000 !important; 
-          pointer-events: none; 
-        }
+        .player-marker-local { transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000 !important; }
       `}</style>
-      <div id="dmn-tactical-map" className="h-full w-full outline-none" />
+      <div id="dmn-tactical-map" className="h-full w-full outline-none bg-[#050505]" />
     </>
   );
 };

@@ -30,19 +30,15 @@
             font-family: 'Inter', sans-serif;
         }
         .leaflet-container {
-            background-color: #000000 !important;
+            background-color: #111111 !important;
         }
-        /* Efeito de mapa tático escuro */
-        .map-tiles {
-            filter: invert(100%) hue-rotate(180deg) brightness(0.4) contrast(1.2) saturate(0);
-        }
+        /* Os filtros de tiles agora são gerenciados dentro do componente GameMap para maior controle */
         .safe-area-top {
             padding-top: env(safe-area-inset-top);
         }
         .safe-area-bottom {
             padding-bottom: env(safe-area-inset-bottom);
         }
-        /* Custom scrollbar para QG e Ranking */
         ::-webkit-scrollbar {
             width: 4px;
         }
