@@ -257,30 +257,36 @@ const App: React.FC = () => {
 
       {view === AppState.LOGIN && (
         <div className="absolute inset-0 bg-black z-[3000] flex flex-col items-center justify-center p-8 overflow-hidden">
-           {/* IMAGEM DE FUNDO TÁTICA */}
+           {/* IMAGEM DE FUNDO - CASAL CAMINHANDO/CORRENDO */}
            <div 
-             className="absolute inset-0 z-[-1] opacity-40 blur-[4px] grayscale-[0.3] brightness-[0.4]"
+             className="absolute inset-0 z-[-1] opacity-50 blur-[5px] grayscale-[0.5] brightness-[0.35]"
              style={{ 
-               backgroundImage: 'url("https://images.unsplash.com/photo-1517466787929-bc90951d0974?q=80&w=2000")', 
+               backgroundImage: 'url("https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=2000")', 
                backgroundSize: 'cover', 
                backgroundPosition: 'center',
                transform: 'scale(1.1)' 
              }}
            ></div>
            
+           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 z-[-1]"></div>
+
            <Radio size={40} className="text-blue-600 mb-4 animate-pulse relative z-10" />
            <h1 className="text-4xl font-black italic mb-8 tracking-tighter uppercase leading-none relative z-10">DOMINA</h1>
            <div className="w-full max-w-xs space-y-3 relative z-10">
               <div className="relative">
                 <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                <input type="text" placeholder="CODINOME" className="w-full bg-black/40 backdrop-blur-md border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
+                <input type="text" placeholder="CODINOME" className="w-full bg-black/50 backdrop-blur-xl border border-white/10 p-4 pl-12 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-xs" value={loginNickname} onChange={e => setLoginNickname(e.target.value)} />
               </div>
-              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-black/40 backdrop-blur-md border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+              <input type="password" placeholder="CHAVE DE ACESSO" className="w-full bg-black/50 backdrop-blur-xl border border-white/10 p-4 rounded-xl outline-none focus:border-blue-500 transition-all uppercase font-black text-center text-xs" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
               {loginError && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-1 animate-bounce">{loginError}</p>}
               <div className="flex gap-2 w-full pt-2">
                 <button onClick={() => handleAuth('login')} className="flex-1 bg-white text-black p-4 rounded-xl font-black italic uppercase text-xs">LOGIN</button>
                 <button onClick={() => handleAuth('register')} className="flex-1 bg-blue-600 p-4 rounded-xl font-black italic uppercase text-xs">JOIN</button>
               </div>
+           </div>
+           
+           <div className="absolute bottom-8 text-center opacity-30">
+              <p className="text-[8px] font-black uppercase tracking-[0.4em]">Protocolo Tático de Movimento</p>
            </div>
         </div>
       )}
