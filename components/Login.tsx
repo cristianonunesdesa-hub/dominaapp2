@@ -1,8 +1,16 @@
+// Arquivo: components/Login.tsx
 
 import React, { useState } from 'react';
-import { Shield, Lock, User as UserIcon, ChevronRight, Loader2, Palette, UserPlus, Key } from 'lucide-react';
+import {
+  Shield,
+  Lock,
+  User as UserIcon,
+  ChevronRight,
+  Loader2,
+  UserPlus,
+  Key
+} from 'lucide-react';
 import { User } from '../types';
-import { TACTICAL_COLORS } from '../constants';
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
@@ -11,7 +19,6 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
-  const [color, setColor] = useState(TACTICAL_COLORS[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -28,15 +35,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         body: JSON.stringify({
           nickname,
           password,
-          color,
           action: mode
         }),
       });
-
-      const text = await response.text();
-        console.log("AUTH RAW RESPONSE:", text);
-      let data: any;
-      try { data = JSON.parse(text); } catch { throw new Error("Servidor não retornou JSON"); }
 
       const data = await response.json();
 
@@ -46,7 +47,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       onLoginSuccess(data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Erro inesperado');
     } finally {
       setLoading(false);
     }
@@ -54,13 +55,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-[8000] bg-black flex flex-col items-center justify-center p-8 overflow-y-auto">
-      {/* Background Decor */}
+      {/* Background */}
       <div className="absolute inset-0 opacity-10 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:30px_30px]"></div>
       </div>
 
       <div className="w-full max-w-sm animate-in fade-in zoom-in duration-500 relative z-10">
-        {/* Logo Section */}
+        {/* Logo */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-600/10 border border-blue-500/30 mb-6 shadow-[0_0_50px_rgba(37,99,235,0.2)]">
             <Shield className="text-blue-500" size={40} />
@@ -73,14 +74,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           </p>
         </div>
 
-        {/* Tactical Tabs */}
+        {/* Tabs */}
         <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-2xl border border-white/10">
           <button
             onClick={() => setMode('login')}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              mode === 'login' 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-              : 'text-white/40 hover:text-white hover:bg-white/5'
+              mode === 'login'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                : 'text-white/40 hover:text-white hover:bg-white/5'
             }`}
           >
             <Key size={14} /> ACESSO
@@ -88,9 +89,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           <button
             onClick={() => setMode('register')}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              mode === 'register' 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-              : 'text-white/40 hover:text-white hover:bg-white/5'
+              mode === 'register'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                : 'text-white/40 hover:text-white hover:bg-white/5'
             }`}
           >
             <UserPlus size={14} /> RECRUTAMENTO
@@ -122,26 +123,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 required
               />
             </div>
-
-            {mode === 'register' && (
-              <div className="pt-2 animate-in slide-in-from-top duration-300">
-                <div className="flex items-center gap-2 mb-3">
-                  <Palette size={14} className="text-blue-500" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Cor de Domínio</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {TACTICAL_COLORS.slice(0, 12).map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`w-7 h-7 rounded-lg border-2 transition-all ${color === c ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.3)]' : 'border-transparent opacity-50 hover:opacity-100'}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {error && (
@@ -155,7 +136,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-6 rounded-[2rem] font-black text-xl italic uppercase shadow-xl transition-all flex items-center justify-center gap-3 border-b-4 border-blue-800 active:translate-y-1 active:border-b-0 group"
           >
-            {loading ? <Loader2 className="animate-spin" size={24} /> : (
+            {loading ? (
+              <Loader2 className="animate-spin" size={24} />
+            ) : (
               <>
                 {mode === 'login' ? 'EFETUAR ACESSO' : 'FINALIZAR REGISTRO'}
                 <ChevronRight size={24} className="group-hover:translate-x-1 transition-transform" />
@@ -175,7 +158,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           25% { transform: translateX(-4px); }
           75% { transform: translateX(4px); }
         }
-        .animate-shake { animation: shake 0.2s ease-in-out infinite; animation-iteration-count: 2; }
+        .animate-shake {
+          animation: shake 0.2s ease-in-out;
+          animation-iteration-count: 2;
+        }
       `}</style>
     </div>
   );
