@@ -3,7 +3,6 @@
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import bcrypt from "bcrypt";
 
 const dbUrl = process.env.DATABASE_URL;
 let pool: Pool | null = null;
@@ -98,7 +97,7 @@ const toUserResponse = (row: any) => ({
   xp: row.xp ?? 0,
   level: row.level ?? 1,
   totalAreaM2: row.total_area_m2 ?? 0,
-  cellsOwned: row.cells_owned ?? 0,
+  cells_owned: row.cells_owned ?? 0,
   lat: row.last_lat ?? null,
   lng: row.last_lng ?? null,
 });
