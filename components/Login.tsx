@@ -33,6 +33,11 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         }),
       });
 
+      const text = await response.text();
+        console.log("AUTH RAW RESPONSE:", text);
+      let data: any;
+      try { data = JSON.parse(text); } catch { throw new Error("Servidor não retornou JSON"); }
+
       const data = await response.json();
 
       if (!response.ok) {
