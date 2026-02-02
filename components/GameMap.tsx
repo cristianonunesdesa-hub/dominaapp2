@@ -37,7 +37,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const playerMarkerRef = useRef<L.Marker | null>(null);
 
-  // (Opcional) markers de outros jogadores
+  // Outros usuários (bolinhas)
   const otherPlayersRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Init map
@@ -87,7 +87,6 @@ const GameMap: React.FC<GameMapProps> = ({
     // Cria ou atualiza markers
     Object.values(cells).forEach((cell: Cell) => {
       const marker = territoryShapesRef.current.get(cell.id);
-
       const fillColor = cell.ownerColor || '#4B5563';
 
       if (!marker) {
@@ -109,7 +108,7 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells]);
 
-  // ✅ Player marker
+  // ✅ Player marker (você)
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
 
@@ -134,29 +133,37 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, [userLocation, introMode]);
 
-  // ✅ Trail
+  // ✅ Trail (linha do rastro)
   useEffect(() => {
     if (!activeTrailLayerRef.current) return;
+
     activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng]));
     activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
   }, [activeTrail, activeUser?.color]);
 
-  // ✅ (Opcional) Outros usuários no mapa (bolinhas coloridas)
-  // Se você não quiser, pode apagar esse useEffect inteiro.
+  // ✅ Outros usuários: bolinhas coloridas (usa users[id].lat/lng)
   useEffect(() => {
     if (!mapRef.current) return;
 
     const ids = new Set(Object.keys(users || {}));
 
-    // Remove markers de usuários que saíram
+    // remove quem saiu / não tem posição / é você
     otherPlayersRef.current.forEach((m, id) => {
-      if (!ids.has(id) || id === activeUserId) {
+      const u = users[id];
+      const invalid =
+        !ids.has(id) ||
+        id === activeUserId ||
+        !u ||
+        typeof u.lat !== 'number' ||
+        typeof u.lng !== 'number';
+
+      if (invalid) {
         m.remove();
         otherPlayersRef.current.delete(id);
       }
     });
 
-    // Cria / atualiza markers dos outros usuários
+    // cria/atualiza
     Object.values(users || {}).forEach((u: User) => {
       if (u.id === activeUserId) return;
       if (typeof u.lat !== 'number' || typeof u.lng !== 'number') return;
