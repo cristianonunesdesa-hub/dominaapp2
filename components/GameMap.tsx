@@ -30,6 +30,12 @@ const GameMap: React.FC<GameMapProps> = ({
   const mapRef = useRef<L.Map | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
   
+  // Ref para evitar stale closures no evento de clique
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
   // Trackers de estado para evitar re-renders pesados
   const lastCellCountRef = useRef<number>(0);
   const territoryShapesRef = useRef<Map<string, L.CircleMarker>>(new Map());
@@ -65,7 +71,12 @@ const GameMap: React.FC<GameMapProps> = ({
       renderer: canvasLayerRef.current
     }).addTo(mapRef.current);
 
-    mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
+    // Usa a Ref para sempre chamar a função atualizada
+    mapRef.current.on('click', (e: L.LeafletMouseEvent) => {
+      if (onMapClickRef.current) {
+        onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+      }
+    });
   }, []);
 
   // ✅ TERRITÓRIO OTIMIZADO

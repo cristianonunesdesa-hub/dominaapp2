@@ -28,51 +28,60 @@ const App: React.FC = () => {
 
   const activityRef = useRef<Activity | null>(null);
   const userLocationRef = useRef<Point | null>(null);
+  const isTestModeRef = useRef(isTestMode);
 
   useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
+  useEffect(() => { isTestModeRef.current = isTestMode; }, [isTestMode]);
 
   const [testAutopilot, setTestAutopilot] = useState(false);
   const testTargetRef = useRef<Point | null>(null);
   const testTimerRef = useRef<number | null>(null);
 
   const handleNewLocation = useCallback((pt: Point, force = false) => {
-    const processed = processLocation(pt, userLocationRef.current, force || isTestMode);
+    const processed = processLocation(pt, userLocationRef.current, force || isTestModeRef.current);
     if (processed) setUserLocation(processed);
-  }, [isTestMode]);
+  }, []);
 
   const startTestAutopilot = useCallback(() => {
-    if (testTimerRef.current !== null) return;
+    // Se já estiver rodando, apenas garante o estado visual
     setTestAutopilot(true);
+    if (testTimerRef.current !== null) return;
+    
     testTimerRef.current = window.setInterval(() => {
       const cur = userLocationRef.current;
       const tgt = testTargetRef.current;
       if (!cur || !tgt) return;
+      
       const dist = calculateDistance(cur, tgt);
-      if (dist < 2) {
+      // Se chegou muito perto, para o movimento desse alvo
+      if (dist < 1.5) {
         testTargetRef.current = null;
         return;
       }
-      const speedMps = 2.2;
-      const dtMs = 250;
+
+      const speedMps = 3.5; // Velocidade de teste levemente aumentada
+      const dtMs = 200;
       const stepMeters = speedMps * (dtMs / 1000);
       const metersPerDegLat = 111_320;
       const metersPerDegLng = 111_320 * Math.cos((cur.lat * Math.PI) / 180);
+      
       const dx = (tgt.lng - cur.lng) * metersPerDegLng;
       const dy = (tgt.lat - cur.lat) * metersPerDegLat;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      
       const ux = dx / len;
       const uy = dy / len;
-      const moveX = ux * stepMeters;
-      const moveY = uy * stepMeters;
+      
       const next: Point = {
-        lat: cur.lat + (moveY / metersPerDegLat),
-        lng: cur.lng + (moveX / metersPerDegLng),
+        lat: cur.lat + (uy * stepMeters / metersPerDegLat),
+        lng: cur.lng + (ux * stepMeters / metersPerDegLng),
         timestamp: Date.now(),
         accuracy: 5
       };
+      
       handleNewLocation(next, true);
-    }, 250);
+    }, 200);
   }, [handleNewLocation]);
 
   const stopTestAutopilot = useCallback(() => {
@@ -323,13 +332,15 @@ const App: React.FC = () => {
         activeUserId={user?.id || ''} activeUser={user}
         currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []}
         onMapClick={(lat, lng) => {
-          if (!isTestMode) return;
+          if (!isTestModeRef.current) return;
+          
           if (!userLocationRef.current) {
             handleNewLocation({ lat, lng, timestamp: Date.now(), accuracy: 5 }, true);
-            return;
+          } else {
+            testTargetRef.current = { lat, lng, timestamp: Date.now(), accuracy: 5 };
+            // Inicia o piloto automático automaticamente ao clicar
+            startTestAutopilot();
           }
-          testTargetRef.current = { lat, lng, timestamp: Date.now(), accuracy: 5 };
-          startTestAutopilot();
         }}
       />
       {view === AppState.LOGIN && <Login onLoginSuccess={(u) => { setUser(u); setView(AppState.HOME); }} />}
