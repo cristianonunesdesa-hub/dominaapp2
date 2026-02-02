@@ -90,8 +90,9 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
   
-  // Otimização crucial: Simplifica o polígono antes de calcular as células internas
-  const path = simplifyPath(rawPath, RDP_EPSILON);
+  // Para preenchimento de área, usamos o rastro original sem simplificar muito
+  // Isso garante que o preenchimento acompanhe as curvas reais do usuário
+  const path = rawPath.length > 20 ? simplifyPath(rawPath, RDP_EPSILON * 0.5) : rawPath;
   
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
   path.forEach(p => {
@@ -99,17 +100,12 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
     minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
   });
 
-  const buffer = GRID_SIZE * 0.5;
+  // Margem de varredura (Sweep)
+  const buffer = GRID_SIZE;
   const startI = Math.floor((minLat - buffer) / GRID_SIZE);
   const endI = Math.ceil((maxLat + buffer) / GRID_SIZE);
   const startJ = Math.floor((minLng - buffer) / GRID_SIZE);
   const endJ = Math.ceil((maxLng + buffer) / GRID_SIZE);
-
-  // Proteção contra áreas absurdamente grandes (ex: pulos de GPS)
-  if ((endI - startI) * (endJ - startJ) > 50000) {
-     console.warn("[Geo] Área de captura muito grande detectada. Abortando para prevenir travamento.");
-     return [];
-  }
 
   const enclosed: string[] = [];
   for (let i = startI; i <= endI; i++) {

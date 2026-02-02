@@ -13,7 +13,7 @@ export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  // Necessário ao menos 3 pontos no rastro para formar uma área fechada
+  // Necessário um rastro mínimo para não fechar no próprio passo (mínimo 3 pontos)
   if (path.length < 3) return null;
 
   const pNew = newLocation;
@@ -21,55 +21,50 @@ export const detectClosedLoop = (
   
   /**
    * SAFETY BUFFER:
-   * Evita que o rastro dê "snap" nele mesmo nos pontos imediatamente anteriores.
-   * Reduzido para 5 para permitir fechamentos de ciclos menores e mais ágeis.
+   * Evita que o rastro dê "snap" nos últimos 3 pontos (aprox. 15 metros atrás).
    */
-  const safetyBuffer = 5; 
+  const safetyBuffer = 3; 
 
   /**
-   * 1. BUSCA POR SNAP (PROXIMIDADE RÍGIDA)
-   * Varremos o rastro do início para o fim.
-   * O primeiro ponto encontrado que esteja a menos de SNAP_TOLERANCE (20m) fecha o ciclo.
+   * 1. REGRA DOS 20 METROS (PRIORIDADE)
+   * Verifica se o usuário chegou perto de QUALQUER ponto anterior do rastro,
+   * começando pelo ponto 0 (Início da corrida).
    */
   let snapIndex = -1;
+  let minSnapDist = Infinity;
+
   for (let i = 0; i < path.length - safetyBuffer; i++) {
     const dist = calculateDistance(pNew, path[i]);
     
-    // Verificação rigorosa do limite de distância (20m definidos em constantes)
     if (dist <= SNAP_TOLERANCE) {
+      // Se encontrou um ponto no raio de 20m, marcamos o fechamento
       snapIndex = i;
-      console.log(`[Territory] Alvo detectado para fechamento! Distância: ${dist.toFixed(2)}m (Limite: ${SNAP_TOLERANCE}m)`);
-      break; 
+      minSnapDist = dist;
+      break; // Fecha no ponto mais antigo possível para maximizar a área
     }
   }
 
   if (snapIndex !== -1) {
-    // Construímos o polígono unindo o ponto atual ao ponto histórico do rastro
+    console.log(`[DOMINA] Loop fechado por proximidade! Distância: ${minSnapDist.toFixed(1)}m`);
+    
+    // Construção do polígono de captura
     const polygon = [...path.slice(snapIndex), pNew, path[snapIndex]];
     
-    // Calculamos as células internas
+    // Cálculo de células internas para o preenchimento
     const enclosedCellIds = getEnclosedCellIds(polygon);
 
-    /**
-     * IMPORTANTE:
-     * Mesmo que o rastro feche fisicamente, se a área for tão pequena que não contenha
-     * o centro de nenhuma célula do grid (Grid de ~2.2m), não consideramos captura.
-     * Isso evita polígonos inválidos (linhas sobrepostas).
-     */
-    if (enclosedCellIds.length > 0) {
-      return {
-        polygon,
-        enclosedCellIds,
-        closurePoint: path[snapIndex]
-      };
-    } else {
-      console.warn("[Territory] Ciclo fechado, mas área muito pequena para capturar células.");
-    }
+    // Se o ciclo fechou fisicamente mas a área é minúscula (< 1 célula), 
+    // ainda assim retornamos para fechar o rastro visualmente
+    return {
+      polygon,
+      enclosedCellIds,
+      closurePoint: path[snapIndex]
+    };
   }
 
   /**
-   * 2. BUSCA POR INTERSEÇÃO (CRUZAMENTO DE LINHA)
-   * Caso o usuário não chegue a 20m de um ponto, mas cruze a própria linha.
+   * 2. FECHAMENTO POR INTERSEÇÃO
+   * Caso o usuário cruze o rastro sem entrar no raio de 20m de um ponto específico.
    */
   for (let i = 0; i < path.length - safetyBuffer; i++) {
     const intersection = getIntersection(pLast, pNew, path[i], path[i + 1]);
@@ -77,14 +72,12 @@ export const detectClosedLoop = (
       const polygon = [intersection, ...path.slice(i + 1), intersection];
       const enclosedCellIds = getEnclosedCellIds(polygon);
       
-      if (enclosedCellIds.length > 0) {
-        console.log(`[Territory] Ciclo detectado por cruzamento no segmento ${i}`);
-        return {
-          polygon,
-          enclosedCellIds,
-          closurePoint: intersection
-        };
-      }
+      console.log(`[DOMINA] Loop fechado por cruzamento no segmento ${i}`);
+      return {
+        polygon,
+        enclosedCellIds,
+        closurePoint: intersection
+      };
     }
   }
 
