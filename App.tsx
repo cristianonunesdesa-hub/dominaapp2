@@ -105,52 +105,69 @@ const App: React.FC = () => {
 
   const handleCapture = useCallback((enclosedIds: string[], loc: Point) => {
     if (!user) return;
-    const newCellsForSync = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
+    
+    // Atualiza interface local IMEDIATAMENTE para dar feedback ao usuário
     const captured: Record<string, Cell> = enclosedIds.reduce((acc, id) => ({
       ...acc,
       [id]: { id, ownerId: user.id, ownerNickname: user.nickname, ownerColor: user.color, bounds: [0,0,0,0], updatedAt: Date.now(), defense: 1 }
     }), {});
+    
     setCells(prev => ({ ...prev, ...captured }));
     setShowConfetti(true);
     playVictorySound();
     setTimeout(() => setShowConfetti(false), 2000);
+
+    // Sincroniza em background
+    const newCellsForSync = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
     fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user.id, newCells: newCellsForSync })
     });
+
+    // Limpa o rastro e adiciona os pontos de captura à estatística da atividade
     setCurrentActivity(prev => {
       if (!prev) return null;
-      return { ...prev, points: [loc], fullPath: [loc], capturedCellIds: new Set([...prev.capturedCellIds, ...enclosedIds]) };
+      return { 
+        ...prev, 
+        points: [loc], 
+        fullPath: [loc], 
+        capturedCellIds: new Set([...prev.capturedCellIds, ...enclosedIds]) 
+      };
     });
   }, [user]);
 
+  // ENGINE DE ATIVIDADE - CORE LOOP
   useEffect(() => {
     const activity = activityRef.current;
     const loc = userLocation;
+    
     if (view === AppState.ACTIVE && loc && activity && user) {
       const rawTrail = activity.fullPath;
       const lastPoint = rawTrail[rawTrail.length - 1];
+      
+      // Cálculo de distância simples para evitar processamento inútil
       const d = lastPoint ? calculateDistance(lastPoint, loc) : 0;
-      const minDist = isTestMode ? 2 : MIN_MOVE_DISTANCE;
+      const minDist = isTestMode ? 1.5 : MIN_MOVE_DISTANCE;
 
       if (d > minDist || rawTrail.length === 0) {
+        // Detecção de Ciclo: Só roda se houver movimento real
         const loop = detectClosedLoop(rawTrail, loc);
+        
         if (loop) {
           handleCapture(loop.enclosedCellIds, loop.closurePoint);
-          return;
+        } else {
+          setCurrentActivity(prev => {
+            if (!prev) return null;
+            const newFullPath = [...prev.fullPath, loc];
+            return { 
+              ...prev, 
+              points: simplifyPath(newFullPath, RDP_EPSILON), 
+              fullPath: newFullPath, 
+              distanceMeters: prev.distanceMeters + d 
+            };
+          });
         }
-
-        setCurrentActivity(prev => {
-          if (!prev) return null;
-          const newFullPath = [...prev.fullPath, loc];
-          return { 
-            ...prev, 
-            points: simplifyPath(newFullPath, RDP_EPSILON), 
-            fullPath: newFullPath, 
-            distanceMeters: prev.distanceMeters + d 
-          };
-        });
       }
     }
   }, [userLocation, view, user, handleCapture, isTestMode]);

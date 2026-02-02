@@ -44,15 +44,16 @@ export const getIntersection = (
 };
 
 /**
- * Versão otimizada de checagem de ponto em polígono.
+ * Algoritmo Ray-Casting otimizado.
  */
 export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {lat: number, lng: number}[]) => {
   let inside = false;
+  const x = point.lng, y = point.lat;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const xi = polygon[i].lng, yi = polygon[i].lat;
     const xj = polygon[j].lng, yj = polygon[j].lat;
-    const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
-                      (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+    const intersect = ((yi > y) !== (yj > y)) &&
+                      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -91,52 +92,48 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 };
 
 /**
- * Função responsável por calcular quais células do grid estão dentro do ciclo.
- * OTIMIZAÇÃO: Agora limita a área de busca para evitar congelamento.
+ * Função crítica de preenchimento. 
+ * Otimizada para evitar o congelamento da thread principal.
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
   
-  // Simplificamos o polígono para reduzir o custo do cálculo isPointInPolygon
-  const path = rawPath.length > 50 ? simplifyPath(rawPath, RDP_EPSILON) : rawPath;
+  // 1. Simplificação agressiva APENAS para o cálculo de preenchimento
+  // Isso reduz o custo de isPointInPolygon drasticamente.
+  const path = simplifyPath(rawPath, RDP_EPSILON * 2);
   
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  path.forEach(p => {
-    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-    minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
-  });
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i];
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
 
-  // Proteção contra GPS saltitante ou distâncias absurdas
+  // 2. Limite de segurança: Evita processar áreas maiores que 1km² (proteção contra bugs de GPS)
   const latDiff = maxLat - minLat;
   const lngDiff = maxLng - minLng;
-  
-  // Se o polígono for maior que ~2km em qualquer direção, abortamos para não travar o browser
-  if (latDiff > 0.02 || lngDiff > 0.02) {
-    console.warn("[Geo] Polígono muito grande detectado. Operação abortada por segurança.");
-    return [];
-  }
+  if (latDiff > 0.01 || lngDiff > 0.01) return [];
 
   const startI = Math.floor(minLat / GRID_SIZE);
   const endI = Math.ceil(maxLat / GRID_SIZE);
   const startJ = Math.floor(minLng / GRID_SIZE);
   const endJ = Math.ceil(maxLng / GRID_SIZE);
 
-  // Limite rígido de células processadas por ciclo (máximo 40.000 células)
-  const totalEstimado = (endI - startI + 1) * (endJ - startJ + 1);
-  if (totalEstimado > 40000) {
-     console.warn("[Geo] Grid de captura excede limites de performance. Ignorando preenchimento.");
-     return [];
-  }
-
   const enclosed: string[] = [];
+  
+  // 3. Varredura com otimização de CPU
   for (let i = startI; i <= endI; i++) {
     const cellLat = i * GRID_SIZE;
     for (let j = startJ; j <= endJ; j++) {
       const cellLng = j * GRID_SIZE;
+      // Chamada otimizada
       if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
         enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
       }
     }
   }
+
   return enclosed;
 };

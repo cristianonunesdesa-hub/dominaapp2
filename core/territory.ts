@@ -10,39 +10,31 @@ export interface LoopResult {
 }
 
 /**
- * ENGINE DE TERRITÓRIO - DOMINA
- * Verifica fechamento de ciclo por proximidade (20m) ou interseção.
+ * Detecção de ciclo de alta performance.
  */
 export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  // Precisa de pelo menos 5 pontos para ser um ciclo minimamente viável
-  if (path.length < 5) return null;
+  // Mínimo de pontos para um ciclo real
+  if (path.length < 6) return null;
 
   const pNew = newLocation;
   const pLast = path[path.length - 1];
   
-  // O usuário deve ter percorrido pelo menos 50 metros totais antes de permitirmos fechar no início
-  // Isso evita que o app tente fechar o ciclo enquanto você ainda está saindo do lugar.
-  let totalDist = 0;
-  for (let k = 1; k < path.length; k++) {
-    totalDist += calculateDistance(path[k-1], path[k]);
-  }
-  if (totalDist < 40) return null;
-
   /**
-   * 1. REGRA DOS 20 METROS (SNAP)
-   * Ignoramos os últimos 10 pontos para evitar "fechar em si mesmo" instantaneamente.
+   * 1. CHECAGEM DE SNAP (20 METROS)
+   * Buscamos se o ponto atual está perto do início ou de qualquer ponto antigo.
+   * Ignoramos os últimos 15 pontos para evitar fechar no próprio rastro recente.
    */
-  const safetyBuffer = 10; 
+  const safetyBuffer = 15;
   let snapIndex = -1;
 
   for (let i = 0; i < path.length - safetyBuffer; i++) {
     const dist = calculateDistance(pNew, path[i]);
     if (dist <= SNAP_TOLERANCE) {
       snapIndex = i;
-      break; 
+      break; // Encontrou o fechamento mais antigo possível, para imediatamente.
     }
   }
 
@@ -50,9 +42,8 @@ export const detectClosedLoop = (
     const polygon = [...path.slice(snapIndex), pNew, path[snapIndex]];
     const enclosedCellIds = getEnclosedCellIds(polygon);
 
-    // Só validamos se houver captura real de área
+    // Só confirma se realmente capturou algo para evitar loops de 0m²
     if (enclosedCellIds.length > 0) {
-      console.log(`[Territory] Loop fechado por proximidade no index ${snapIndex}`);
       return {
         polygon,
         enclosedCellIds,
@@ -62,7 +53,8 @@ export const detectClosedLoop = (
   }
 
   /**
-   * 2. FECHAMENTO POR INTERSEÇÃO
+   * 2. CHECAGEM DE INTERSEÇÃO (CRUZAMENTO DE LINHA)
+   * Apenas se o snap de 20m não disparou.
    */
   for (let i = 0; i < path.length - safetyBuffer; i++) {
     const intersection = getIntersection(pLast, pNew, path[i], path[i + 1]);
@@ -71,7 +63,6 @@ export const detectClosedLoop = (
       const enclosedCellIds = getEnclosedCellIds(polygon);
       
       if (enclosedCellIds.length > 0) {
-        console.log(`[Territory] Loop fechado por cruzamento no segmento ${i}`);
         return {
           polygon,
           enclosedCellIds,
