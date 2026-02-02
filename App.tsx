@@ -9,7 +9,8 @@ import ConfettiEffect from './components/ConfettiEffect';
 import Leaderboard from './components/Leaderboard';
 import MissionSummary from './components/MissionSummary';
 import Login from './components/Login';
-import { Globe, Activity as ActivityIcon, MapPinOff, RefreshCw, Shield, LogOut } from 'lucide-react';
+import TestSimulator from './components/TestSimulator';
+import { Globe, Activity as ActivityIcon, MapPinOff, RefreshCw, Shield, LogOut, Zap } from 'lucide-react';
 import { playVictorySound } from './utils/audio';
 
 const ACCURACY_THRESHOLD = 150; 
@@ -20,6 +21,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(false);
   const [globalUsers, setGlobalUsers] = useState<Record<string, User>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
@@ -28,15 +30,17 @@ const App: React.FC = () => {
 
   const activityRef = useRef<Activity | null>(null);
   const userLocationRef = useRef<Point | null>(null);
+  const isTestModeRef = useRef(isTestMode);
   const syncIntervalRef = useRef<number | null>(null);
 
   useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
+  useEffect(() => { isTestModeRef.current = isTestMode; }, [isTestMode]);
 
   const handleNewLocation = useCallback((rawPoint: Point, force: boolean = false) => {
     const lastPoint = userLocationRef.current;
     
-    if (!force) {
+    if (!force && !isTestModeRef.current) {
         if (rawPoint.accuracy && rawPoint.accuracy > ACCURACY_THRESHOLD && lastPoint) return;
     }
 
@@ -62,7 +66,10 @@ const App: React.FC = () => {
       geoOptions
     );
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => handleNewLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: pos.timestamp }),
+      (pos) => {
+        if (isTestModeRef.current) return;
+        handleNewLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: pos.timestamp });
+      },
       (err) => console.debug("GPS Watch:", err.message),
       geoOptions
     );
@@ -135,7 +142,7 @@ const App: React.FC = () => {
       const rawTrail = activity.fullPath;
       const lastPoint = rawTrail[rawTrail.length - 1];
       const d = lastPoint ? calculateDistance(lastPoint, loc) : 0;
-      const minDist = MIN_MOVE_DISTANCE;
+      const minDist = isTestMode ? 2 : MIN_MOVE_DISTANCE;
 
       if (d > minDist || rawTrail.length === 0) {
         const nextRawTrail = [...rawTrail, loc];
@@ -170,7 +177,7 @@ const App: React.FC = () => {
         });
       }
     }
-  }, [userLocation, view, user, captureArea]);
+  }, [userLocation, view, user, captureArea, isTestMode]);
 
   const onLoginSuccess = (u: User) => {
     setUser(u);
@@ -195,9 +202,18 @@ const App: React.FC = () => {
         <GameMap 
           userLocation={userLocation} cells={cells} users={globalUsers} activeUserId={user?.id || ''} activeUser={user} 
           currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []}
+          onMapClick={(lat, lng) => isTestMode && handleNewLocation({ lat, lng, timestamp: Date.now() }, true)}
           introMode={view === AppState.BOOT || (view === AppState.HOME && !isIntroReady) || view === AppState.LOGIN}
         />
       </div>
+
+      <TestSimulator 
+        isActive={isTestMode} 
+        onToggle={setIsTestMode} 
+        onManualLocation={handleNewLocation}
+        userLocation={userLocation}
+        isVisible={view !== AppState.LOGIN && isIntroReady}
+      />
 
       {!userLocation && view !== AppState.BOOT && view !== AppState.LOGIN && (
         <div className="absolute inset-0 z-[7000] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
@@ -206,7 +222,10 @@ const App: React.FC = () => {
             <MapPinOff className="absolute inset-0 m-auto text-blue-500 animate-pulse" size={32} />
           </div>
           <h2 className="text-2xl font-black uppercase italic mb-3 tracking-tighter">Sinal de GPS Ausente</h2>
-          <button onClick={() => startGpsTracking()} className="bg-blue-600/20 border border-blue-500/50 px-8 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase italic tracking-widest active:scale-95 transition-all"><RefreshCw size={14} /> Reconectar</button>
+          <div className="space-y-4 w-full max-w-xs pointer-events-auto">
+            <button onClick={() => startGpsTracking()} className="w-full bg-blue-600/20 border border-blue-500/50 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase italic tracking-widest active:scale-95 transition-all"><RefreshCw size={14} /> Reconectar</button>
+            <button onClick={() => { setIsTestMode(true); handleNewLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now(), accuracy: 5 }, true); }} className="w-full bg-orange-600 py-5 rounded-3xl font-black text-sm uppercase italic shadow-2xl active:scale-95 transition-all border-b-4 border-orange-800 flex items-center justify-center gap-3"><Zap size={18} className="fill-white" /> ATIVAR MODO TESTE</button>
+          </div>
         </div>
       )}
 
