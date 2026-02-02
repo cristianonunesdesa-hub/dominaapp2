@@ -18,21 +18,22 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-export const getIntersection = (
-  p1: Point, p2: Point, 
-  p3: Point, p4: Point
-): Point | null => {
+/**
+ * getIntersection - Detecta cruzamento de dois segmentos (p1-p2 e p3-p4)
+ */
+export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
   const x1 = p1.lng, y1 = p1.lat;
   const x2 = p2.lng, y2 = p2.lat;
   const x3 = p3.lng, y3 = p3.lat;
   const x4 = p4.lng, y4 = p4.lat;
 
   const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (Math.abs(denom) < 0.0000000001) return null;
+  if (denom === 0) return null; // Paralelas
 
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
+  // Verifica se a interseção ocorre dentro de ambos os segmentos
   if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
     return {
       lat: y1 + ua * (y2 - y1),
@@ -77,13 +78,13 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 
 /**
  * getEnclosedCellIds - Scanline Fill Algorithm
- * Calcula as células internas em tempo recorde (O(N*H)).
+ * Preenchimento ultra-rápido para polígonos.
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
 
-  // Simplifica o polígono para acelerar o cálculo de interseções
-  const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.5);
+  // Simplificamos levemente para acelerar o cálculo de interseções laterais
+  const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.2);
   
   let minLat = Infinity, maxLat = -Infinity;
   polygon.forEach(p => {
@@ -94,8 +95,8 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   const startI = Math.floor(minLat / GRID_SIZE);
   const endI = Math.ceil(maxLat / GRID_SIZE);
   
-  // Limite de segurança para não travar em caso de erro de GPS
-  if (endI - startI > 500) return []; 
+  // Proteção: não processa se a área for absurdamente grande (bug de GPS)
+  if (endI - startI > 800) return []; 
 
   const enclosed: string[] = [];
 
@@ -107,6 +108,7 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
       const p1 = polygon[j];
       const p2 = polygon[(j + 1) % polygon.length];
 
+      // Verifica se a linha horizontal currentLat cruza o segmento p1-p2
       if ((p1.lat <= currentLat && p2.lat > currentLat) || (p2.lat <= currentLat && p1.lat > currentLat)) {
         const intersectLng = p1.lng + (currentLat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat);
         intersections.push(intersectLng);
@@ -115,6 +117,7 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
 
     intersections.sort((a, b) => a - b);
 
+    // Regra Par-Ímpar (Even-Odd) para preenchimento
     for (let k = 0; k < intersections.length; k += 2) {
       if (k + 1 >= intersections.length) break;
       const startLng = intersections[k];
@@ -130,6 +133,5 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
     }
   }
 
-  // Prevenção de estouro de memória (máximo 15 mil células por captura)
-  return enclosed.slice(0, 15000);
+  return enclosed;
 };
