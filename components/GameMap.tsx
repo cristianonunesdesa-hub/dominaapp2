@@ -70,28 +70,25 @@ const GameMap: React.FC<GameMapProps> = ({
     mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
   }, []);
 
-  // ✅ TERRITÓRIO: cria markers novos E ATUALIZA A COR dos que já existem
+  // ✅ TERRITÓRIO OTIMIZADO: Diffing de cores e loop de alta performance
   useEffect(() => {
     if (!mapRef.current || !canvasLayerRef.current) return;
 
-    const currentCellIds = new Set(Object.keys(cells));
+    const visitedIds = new Set<string>();
+    const currentCells = cells;
+    const shapes = territoryShapesRef.current;
 
-    // Remove markers que não existem mais
-    territoryShapesRef.current.forEach((shape, id) => {
-      if (!currentCellIds.has(id)) {
-        shape.remove();
-        territoryShapesRef.current.delete(id);
-      }
-    });
-
-    // Cria ou atualiza markers
-    Object.values(cells).forEach((cell: Cell) => {
-      const marker = territoryShapesRef.current.get(cell.id);
+    // Usamos for...in por ser mais rápido que Object.values em objetos com milhares de chaves
+    for (const id in currentCells) {
+      const cell = currentCells[id];
+      visitedIds.add(id);
+      
+      const marker = shapes.get(id);
       const fillColor = cell.ownerColor || '#4B5563';
 
       if (!marker) {
-        const [lat, lng] = cell.id.split('_').map(parseFloat);
-
+        // Criar marker novo apenas se não existir
+        const [lat, lng] = id.split('_').map(parseFloat);
         const newMarker = L.circleMarker([lat, lng], {
           radius: 3,
           stroke: false,
@@ -101,9 +98,24 @@ const GameMap: React.FC<GameMapProps> = ({
           interactive: false
         }).addTo(mapRef.current!);
 
-        territoryShapesRef.current.set(cell.id, newMarker);
+        // Guardamos a última cor para evitar setStyle desnecessário no futuro
+        (newMarker as any)._lastColor = fillColor;
+        shapes.set(id, newMarker);
       } else {
-        marker.setStyle({ fillColor, fillOpacity: 0.8 });
+        // Atualiza a cor APENAS se houver mudança real
+        // setStyle é uma operação pesada no Leaflet (recalcula path no canvas)
+        if ((marker as any)._lastColor !== fillColor) {
+          marker.setStyle({ fillColor });
+          (marker as any)._lastColor = fillColor;
+        }
+      }
+    }
+
+    // Remoção eficiente de markers obsoletos
+    shapes.forEach((marker, id) => {
+      if (!visitedIds.has(id)) {
+        marker.remove();
+        shapes.delete(id);
       }
     });
   }, [cells]);
@@ -141,14 +153,14 @@ const GameMap: React.FC<GameMapProps> = ({
     activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
   }, [activeTrail, activeUser?.color]);
 
-  // ✅ Outros usuários: bolinhas coloridas (usa users[id].lat/lng)
+  // ✅ Outros usuários: bolinhas coloridas
   useEffect(() => {
     if (!mapRef.current) return;
 
     const ids = new Set(Object.keys(users || {}));
+    const others = otherPlayersRef.current;
 
-    // remove quem saiu / não tem posição / é você
-    otherPlayersRef.current.forEach((m, id) => {
+    others.forEach((m, id) => {
       const u = users[id];
       const invalid =
         !ids.has(id) ||
@@ -159,17 +171,16 @@ const GameMap: React.FC<GameMapProps> = ({
 
       if (invalid) {
         m.remove();
-        otherPlayersRef.current.delete(id);
+        others.delete(id);
       }
     });
 
-    // cria/atualiza
-    Object.values(users || {}).forEach((u: User) => {
-      if (u.id === activeUserId) return;
-      if (typeof u.lat !== 'number' || typeof u.lng !== 'number') return;
+    for (const id in users) {
+      const u = users[id];
+      if (u.id === activeUserId) continue;
+      if (typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
 
-      const existing = otherPlayersRef.current.get(u.id);
-
+      const existing = others.get(u.id);
       const html = `
         <div class="relative w-8 h-8 flex items-center justify-center">
           <div class="absolute inset-0 rounded-full blur-md" style="background:${u.color}55"></div>
@@ -186,12 +197,11 @@ const GameMap: React.FC<GameMapProps> = ({
             iconAnchor: [16, 16]
           })
         }).addTo(mapRef.current!);
-
-        otherPlayersRef.current.set(u.id, marker);
+        others.set(u.id, marker);
       } else {
         existing.setLatLng([u.lat, u.lng]);
       }
-    });
+    }
   }, [users, activeUserId]);
 
   return (

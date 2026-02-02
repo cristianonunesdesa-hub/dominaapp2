@@ -15,7 +15,6 @@ const getPool = () => {
 };
 
 const ensureTables = async (client: any, wipe: boolean = false) => {
-  // Garantir existência das tabelas com schema base
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -38,7 +37,6 @@ const ensureTables = async (client: any, wipe: boolean = false) => {
     );
   `);
 
-  // Garantir que as colunas críticas existam via ALTER TABLE (idempotente)
   await client.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;
@@ -46,7 +44,6 @@ const ensureTables = async (client: any, wipe: boolean = false) => {
   `);
 
   if (wipe) {
-    console.log("!!! WIPING ALL DATABASE DATA !!!");
     await client.query("TRUNCATE TABLE cells;");
     await client.query("TRUNCATE TABLE users;");
   }
@@ -59,14 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { userId, location, newCells, stats, wipe } = req.body;
 
   if (wipe === true && process.env.NODE_ENV !== "development") {
-    return res.status(403).json({ error: "Wipe bloqueado fora de development." });
+    return res.status(403).json({ error: "Wipe bloqueado." });
   }
 
   const client = await getPool().connect();
 
   try {
     await ensureTables(client, wipe === true);
-    if (wipe === true) return res.status(200).json({ message: "Database cleared successfully" });
+    if (wipe === true) return res.status(200).json({ message: "Database cleared" });
 
     await client.query("BEGIN");
 
@@ -74,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const nickname = stats?.nickname || null;
       const color = stats?.color || null;
 
-      // UPSERT robusto: se nickname/color forem null no payload de polling, o banco mantém o valor existente
+      // Corrigido: Não usamos COALESCE no VALUES para permitir que o ON CONFLICT decida se deve atualizar ou manter o antigo
       await client.query(
         `
         INSERT INTO users (
@@ -83,11 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           last_lat, last_lng, last_seen
         )
         VALUES (
-          $1, 
-          COALESCE($2, 'UNKNOWN'), 
-          '', 
-          COALESCE($3, '#3B82F6'), 
-          $4, $5, $6, $7, $8, $9, $10, $11
+          $1, $2, '', $3, $4, $5, $6, $7, $8, $9, $10, $11
         )
         ON CONFLICT (id)
         DO UPDATE SET
