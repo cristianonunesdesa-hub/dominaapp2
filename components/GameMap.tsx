@@ -12,7 +12,7 @@ interface GameMapProps {
   activeUser: User | null;
   currentPath: Point[]; 
   activeTrail?: Point[]; 
-  onMapClick?: (lat, lng) => void;
+  onMapClick?: (lat: number, lng: number) => void;
   introMode?: boolean;
 }
 
@@ -33,7 +33,10 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     if (!mapRef.current) {
       mapRef.current = L.map('dmn-tactical-map', {
-        zoomControl: false, attributionControl: false, preferCanvas: true
+        zoomControl: false, 
+        attributionControl: false, 
+        preferCanvas: true, // Crucial para performance
+        bounceAtZoomLimits: false
       }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 18);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -42,16 +45,15 @@ const GameMap: React.FC<GameMapProps> = ({
       
       const territoryPane = mapRef.current.createPane('liquidTerritory');
       territoryPane.style.zIndex = '400';
-      territoryPane.classList.add('liquid-territory-container');
       
       territoryGroupRef.current = L.layerGroup([], { pane: 'liquidTerritory' }).addTo(mapRef.current);
 
       fullPathLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#3B82F6', weight: 2, opacity: 0.1, smoothFactor: 3
+        color: activeUser?.color || '#3B82F6', weight: 2, opacity: 0.15, smoothFactor: 5
       }).addTo(mapRef.current);
 
       activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#3B82F6', weight: 8, opacity: 0.7, lineCap: 'round', lineJoin: 'round', smoothFactor: 1.2
+        color: activeUser?.color || '#3B82F6', weight: 6, opacity: 0.8, lineCap: 'round', lineJoin: 'round', smoothFactor: 1.5
       }).addTo(mapRef.current);
 
       mapRef.current.on('click', (e) => {
@@ -62,27 +64,28 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, []);
 
+  // Otimização de renderização de células: usa círculos simples no canvas
   useEffect(() => {
     if (!territoryGroupRef.current) return;
-    territoryGroupRef.current.clearLayers();
+    const group = territoryGroupRef.current;
+    group.clearLayers();
 
-    Object.values(cells).forEach((cell: Cell) => {
+    // Renderiza apenas uma fração das células se houverem muitas, ou usa um sistema de clustering visual
+    const cellEntries = Object.values(cells);
+    cellEntries.forEach((cell: Cell) => {
       const [lat, lng] = cell.id.split('_').map(parseFloat);
-      
-      // Sempre usar a cor original do dono definida no cadastro/mock
-      // Se não houver dono (neutro), usa um cinza tático
       const color = cell.ownerColor || '#9CA3AF';
       
       L.circle([lat, lng], {
-        radius: 3.5,
+        radius: 4,
         stroke: false,
         fillColor: color,
-        fillOpacity: 1,
+        fillOpacity: 0.8,
         interactive: false,
         pane: 'liquidTerritory'
-      }).addTo(territoryGroupRef.current!);
+      }).addTo(group);
     });
-  }, [cells]); // Removido activeUserId da dependência pois a cor não depende mais de quem está olhando
+  }, [cells]);
 
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
@@ -101,19 +104,19 @@ const GameMap: React.FC<GameMapProps> = ({
       playerMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
     }
 
-    if (!introMode) {
-       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+    if (!introMode && mapRef.current.getZoom() > 10) {
+       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.3 });
     }
   }, [userLocation, introMode]);
 
   useEffect(() => { 
-    if (activeTrailLayerRef.current) activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
-    if (fullPathLayerRef.current) {
-        fullPathLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
-        fullPathLayerRef.current.setLatLngs(currentPath?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
-    }
     if (activeTrailLayerRef.current) {
-        activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
+      activeTrailLayerRef.current.setLatLngs(activeTrail?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
+      activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
+    }
+    if (fullPathLayerRef.current) {
+      fullPathLayerRef.current.setLatLngs(currentPath?.map(p => [p.lat, p.lng] as L.LatLngTuple) || []);
+      fullPathLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
     }
   }, [activeTrail, currentPath, activeUser?.color]);
 
@@ -122,12 +125,12 @@ const GameMap: React.FC<GameMapProps> = ({
       <style>{`
         .map-tiles { filter: brightness(0.6) contrast(1.2) saturate(0.2) invert(95%) hue-rotate(180deg); opacity: 0.9; }
         .liquid-territory-container {
-          filter: blur(8px) contrast(30);
+          filter: blur(4px) contrast(20);
           mix-blend-mode: screen;
           opacity: 0.8;
           pointer-events: none;
         }
-        .player-marker-local { transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000 !important; }
+        .player-marker-local { transition: transform 0.1s linear; z-index: 1000 !important; }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full outline-none bg-[#050505]" />
     </>

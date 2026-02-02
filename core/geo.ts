@@ -43,22 +43,6 @@ export const getIntersection = (
   return null;
 };
 
-/**
- * Algoritmo Ray-Casting otimizado.
- */
-export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {lat: number, lng: number}[]) => {
-  let inside = false;
-  const x = point.lng, y = point.lat;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lng, yi = polygon[i].lat;
-    const xj = polygon[j].lng, yj = polygon[j].lat;
-    const intersect = ((yi > y) !== (yj > y)) &&
-                      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-};
-
 export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   if (points.length <= 2) return points;
   
@@ -92,47 +76,68 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 };
 
 /**
- * Função crítica de preenchimento. 
- * Otimizada para evitar o congelamento da thread principal.
+ * getEnclosedCellIds - VERSÃO ULTRA PERFORMÁTICA (Scanline Fill)
+ * Em vez de testar ponto a ponto, calculamos as faixas horizontais de preenchimento.
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
+
+  // 1. Simplificar para garantir performance, mas manter fidelidade
+  const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.5);
   
-  // 1. Simplificação agressiva APENAS para o cálculo de preenchimento
-  // Isso reduz o custo de isPointInPolygon drasticamente.
-  const path = simplifyPath(rawPath, RDP_EPSILON * 2);
-  
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  for (let i = 0; i < path.length; i++) {
-    const p = path[i];
+  // Bounding Box
+  let minLat = Infinity, maxLat = -Infinity;
+  polygon.forEach(p => {
     if (p.lat < minLat) minLat = p.lat;
     if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
-  }
-
-  // 2. Limite de segurança: Evita processar áreas maiores que 1km² (proteção contra bugs de GPS)
-  const latDiff = maxLat - minLat;
-  const lngDiff = maxLng - minLng;
-  if (latDiff > 0.01 || lngDiff > 0.01) return [];
+  });
 
   const startI = Math.floor(minLat / GRID_SIZE);
   const endI = Math.ceil(maxLat / GRID_SIZE);
-  const startJ = Math.floor(minLng / GRID_SIZE);
-  const endJ = Math.ceil(maxLng / GRID_SIZE);
-
-  const enclosed: string[] = [];
   
-  // 3. Varredura com otimização de CPU
+  const enclosed: string[] = [];
+
+  // 2. Scanline: Para cada latitude do grid, encontramos as interseções com as arestas do polígono
   for (let i = startI; i <= endI; i++) {
-    const cellLat = i * GRID_SIZE;
-    for (let j = startJ; j <= endJ; j++) {
-      const cellLng = j * GRID_SIZE;
-      // Chamada otimizada
-      if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
-        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
+    const currentLat = i * GRID_SIZE;
+    const intersections: number[] = [];
+
+    for (let j = 0; j < polygon.length; j++) {
+      const p1 = polygon[j];
+      const p2 = polygon[(j + 1) % polygon.length];
+
+      // Verifica se a linha horizontal currentLat cruza a aresta p1-p2
+      if ((p1.lat <= currentLat && p2.lat > currentLat) || (p2.lat <= currentLat && p1.lat > currentLat)) {
+        // Cálculo da longitude da interseção (Regra de Três / Interpolação Linear)
+        const intersectLng = p1.lng + (currentLat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat);
+        intersections.push(intersectLng);
       }
     }
+
+    // Ordena as interseções da esquerda para a direita (longitude crescente)
+    intersections.sort((a, b) => a - b);
+
+    // Preenche entre os pares de interseção (Regra Even-Odd)
+    for (let k = 0; k < intersections.length; k += 2) {
+      if (k + 1 >= intersections.length) break;
+      
+      const startLng = intersections[k];
+      const endLng = intersections[k + 1];
+
+      const startJ = Math.ceil(startLng / GRID_SIZE);
+      const endJ = Math.floor(endLng / GRID_SIZE);
+
+      for (let j = startJ; j <= endJ; j++) {
+        const cellLng = j * GRID_SIZE;
+        enclosed.push(`${currentLat.toFixed(8)}_${cellLng.toFixed(8)}`);
+      }
+    }
+  }
+
+  // Limite de segurança: se gerar mais de 20k células, provavelmente é um erro de GPS (evita travar o mapa)
+  if (enclosed.length > 20000) {
+    console.warn("[Geo] Área de captura excessiva detectada. Abortando preenchimento.");
+    return [];
   }
 
   return enclosed;
