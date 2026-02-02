@@ -76,16 +76,15 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 };
 
 /**
- * getEnclosedCellIds - VERSÃO ULTRA PERFORMÁTICA (Scanline Fill)
- * Em vez de testar ponto a ponto, calculamos as faixas horizontais de preenchimento.
+ * getEnclosedCellIds - Scanline Fill Algorithm
+ * Calcula as células internas em tempo recorde (O(N*H)).
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
 
-  // 1. Simplificar para garantir performance, mas manter fidelidade
+  // Simplifica o polígono para acelerar o cálculo de interseções
   const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.5);
   
-  // Bounding Box
   let minLat = Infinity, maxLat = -Infinity;
   polygon.forEach(p => {
     if (p.lat < minLat) minLat = p.lat;
@@ -95,9 +94,11 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   const startI = Math.floor(minLat / GRID_SIZE);
   const endI = Math.ceil(maxLat / GRID_SIZE);
   
+  // Limite de segurança para não travar em caso de erro de GPS
+  if (endI - startI > 500) return []; 
+
   const enclosed: string[] = [];
 
-  // 2. Scanline: Para cada latitude do grid, encontramos as interseções com as arestas do polígono
   for (let i = startI; i <= endI; i++) {
     const currentLat = i * GRID_SIZE;
     const intersections: number[] = [];
@@ -106,21 +107,16 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
       const p1 = polygon[j];
       const p2 = polygon[(j + 1) % polygon.length];
 
-      // Verifica se a linha horizontal currentLat cruza a aresta p1-p2
       if ((p1.lat <= currentLat && p2.lat > currentLat) || (p2.lat <= currentLat && p1.lat > currentLat)) {
-        // Cálculo da longitude da interseção (Regra de Três / Interpolação Linear)
         const intersectLng = p1.lng + (currentLat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat);
         intersections.push(intersectLng);
       }
     }
 
-    // Ordena as interseções da esquerda para a direita (longitude crescente)
     intersections.sort((a, b) => a - b);
 
-    // Preenche entre os pares de interseção (Regra Even-Odd)
     for (let k = 0; k < intersections.length; k += 2) {
       if (k + 1 >= intersections.length) break;
-      
       const startLng = intersections[k];
       const endLng = intersections[k + 1];
 
@@ -134,11 +130,6 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
     }
   }
 
-  // Limite de segurança: se gerar mais de 20k células, provavelmente é um erro de GPS (evita travar o mapa)
-  if (enclosed.length > 20000) {
-    console.warn("[Geo] Área de captura excessiva detectada. Abortando preenchimento.");
-    return [];
-  }
-
-  return enclosed;
+  // Prevenção de estouro de memória (máximo 15 mil células por captura)
+  return enclosed.slice(0, 15000);
 };
