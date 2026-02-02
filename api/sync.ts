@@ -15,11 +15,13 @@ const getPool = () => {
   return pool;
 };
 
-const ensureTables = async (client: any) => {
-  // ATENÇÃO: Descomente as linhas de TRUNCATE abaixo apenas se precisar "zerar" o banco manualmente
-  // await client.query("TRUNCATE TABLE cells;");
-  // await client.query("TRUNCATE TABLE users;");
-  
+const ensureTables = async (client: any, wipe: boolean = false) => {
+  if (wipe) {
+    console.log("!!! WIPING ALL DATABASE DATA !!!");
+    await client.query("TRUNCATE TABLE cells CASCADE;");
+    await client.query("TRUNCATE TABLE users CASCADE;");
+  }
+
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -46,14 +48,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!dbUrl) return res.status(500).json({ error: "DATABASE_URL não configurada." });
 
-  const { userId, location, newCells, stats } = req.body;
+  const { userId, location, newCells, stats, wipe } = req.body;
   const client = await getPool().connect();
 
   try {
-    await ensureTables(client);
+    // Se o flag wipe estiver ativo, limpa as tabelas antes de qualquer operação
+    await ensureTables(client, wipe === true);
+    
+    if (wipe === true) {
+      return res.status(200).json({ message: "Database cleared successfully" });
+    }
+
     await client.query('BEGIN');
 
-    // Atualiza apenas usuários que JÁ existem (criados via auth)
     if (userId) {
       await client.query(`
         UPDATE users SET 

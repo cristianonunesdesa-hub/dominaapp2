@@ -10,7 +10,7 @@ import Leaderboard from './components/Leaderboard';
 import MissionSummary from './components/MissionSummary';
 import Login from './components/Login';
 import TestSimulator from './components/TestSimulator';
-import { Globe, Activity as ActivityIcon, MapPinOff, RefreshCw, Shield, LogOut, Zap } from 'lucide-react';
+import { Globe, Activity as ActivityIcon, MapPinOff, RefreshCw, LogOut } from 'lucide-react';
 import { playVictorySound } from './utils/audio';
 
 const ACCURACY_THRESHOLD = 150; 
@@ -40,6 +40,7 @@ const App: React.FC = () => {
   const handleNewLocation = useCallback((rawPoint: Point, force: boolean = false) => {
     const lastPoint = userLocationRef.current;
     
+    // Filtro de precisão (Ignorado em modo teste para agilidade)
     if (!force && !isTestModeRef.current) {
         if (rawPoint.accuracy && rawPoint.accuracy > ACCURACY_THRESHOLD && lastPoint) return;
     }
@@ -60,11 +61,6 @@ const App: React.FC = () => {
       return;
     }
     const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
-    navigator.geolocation.getCurrentPosition(
-      (pos) => handleNewLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: pos.timestamp }),
-      (err) => setGpsError(err.message),
-      geoOptions
-    );
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         if (isTestModeRef.current) return;
@@ -179,11 +175,6 @@ const App: React.FC = () => {
     }
   }, [userLocation, view, user, captureArea, isTestMode]);
 
-  const onLoginSuccess = (u: User) => {
-    setUser(u);
-    setView(AppState.BOOT);
-  };
-
   const handleLogout = () => {
     setUser(null);
     setView(AppState.LOGIN);
@@ -194,38 +185,34 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full bg-black text-white relative overflow-hidden font-sans select-none">
       <div className="fixed inset-0 z-[5000] pointer-events-none vignette-overlay"></div>
-      <div className="fixed inset-0 z-[5001] pointer-events-none grain-overlay"></div>
       
-      {view === AppState.LOGIN && <Login onLoginSuccess={onLoginSuccess} />}
+      {view === AppState.LOGIN && <Login onLoginSuccess={(u) => { setUser(u); setView(AppState.BOOT); }} />}
 
       <div className="absolute inset-0 z-0">
         <GameMap 
           userLocation={userLocation} cells={cells} users={globalUsers} activeUserId={user?.id || ''} activeUser={user} 
           currentPath={currentActivity?.fullPath || []} activeTrail={currentActivity?.points || []}
           onMapClick={(lat, lng) => isTestMode && handleNewLocation({ lat, lng, timestamp: Date.now() }, true)}
-          introMode={view === AppState.BOOT || (view === AppState.HOME && !isIntroReady) || view === AppState.LOGIN}
+          introMode={view !== AppState.HOME && view !== AppState.ACTIVE}
         />
       </div>
 
       <TestSimulator 
-        isActive={isTestMode} 
+        isEnabled={isTestMode} 
         onToggle={setIsTestMode} 
-        onManualLocation={handleNewLocation}
+        onLocationUpdate={handleNewLocation}
         userLocation={userLocation}
-        isVisible={view !== AppState.LOGIN && isIntroReady}
+        showOverlay={view !== AppState.LOGIN && isIntroReady}
       />
 
-      {!userLocation && view !== AppState.BOOT && view !== AppState.LOGIN && (
+      {!userLocation && view !== AppState.BOOT && view !== AppState.LOGIN && !isTestMode && (
         <div className="absolute inset-0 z-[7000] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
           <div className="relative mb-12">
             <div className="w-20 h-20 border-4 border-blue-600/20 border-t-blue-500 rounded-full animate-spin"></div>
             <MapPinOff className="absolute inset-0 m-auto text-blue-500 animate-pulse" size={32} />
           </div>
           <h2 className="text-2xl font-black uppercase italic mb-3 tracking-tighter">Sinal de GPS Ausente</h2>
-          <div className="space-y-4 w-full max-w-xs pointer-events-auto">
-            <button onClick={() => startGpsTracking()} className="w-full bg-blue-600/20 border border-blue-500/50 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase italic tracking-widest active:scale-95 transition-all"><RefreshCw size={14} /> Reconectar</button>
-            <button onClick={() => { setIsTestMode(true); handleNewLocation({ lat: -23.5505, lng: -46.6333, timestamp: Date.now(), accuracy: 5 }, true); }} className="w-full bg-orange-600 py-5 rounded-3xl font-black text-sm uppercase italic shadow-2xl active:scale-95 transition-all border-b-4 border-orange-800 flex items-center justify-center gap-3"><Zap size={18} className="fill-white" /> ATIVAR MODO TESTE</button>
-          </div>
+          <button onClick={() => window.location.reload()} className="w-full max-w-xs bg-blue-600/20 border border-blue-500/50 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase italic tracking-widest active:scale-95 transition-all"><RefreshCw size={14} /> Reconectar</button>
         </div>
       )}
 
@@ -235,12 +222,12 @@ const App: React.FC = () => {
         <div className={`absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none transition-all duration-1000 transform ${isIntroReady ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           <div className="flex justify-between items-center mb-4 pointer-events-auto bg-black/80 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
             <div className="flex gap-3 items-center">
-              <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden relative">
+              <div className="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 overflow-hidden relative group">
                 <img src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.nickname}`} className="w-full h-full object-cover" />
-                <button onClick={handleLogout} className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center"><LogOut size={16} className="text-red-500" /></button>
+                <button onClick={handleLogout} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><LogOut size={16} className="text-red-500" /></button>
               </div>
               <div>
-                <h3 className="font-black italic uppercase text-sm leading-none flex items-center gap-2">{user.nickname}<button onClick={handleLogout} className="p-1 hover:text-red-500 transition-colors"><LogOut size={12}/></button></h3>
+                <h3 className="font-black italic uppercase text-sm leading-none flex items-center gap-2">{user.nickname}</h3>
                 <span className="text-[8px] font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase mt-1 inline-block">Nível {user.level}</span>
               </div>
             </div>
@@ -253,7 +240,8 @@ const App: React.FC = () => {
       {view === AppState.ACTIVE && currentActivity && <ActivityOverlay activity={currentActivity} user={user} onStop={() => setView(AppState.SUMMARY)} />}
       {view === AppState.SUMMARY && currentActivity && user && <MissionSummary activity={currentActivity} user={user} onFinish={() => setView(AppState.HOME)} />}
       {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers)} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
-      <style>{` .vignette-overlay { background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 120%); } .grain-overlay { background-image: url("https://grainy-gradients.vercel.app/noise.svg"); opacity: 0.04; } `}</style>
+      
+      <style>{` .vignette-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 5000; background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 120%); } `}</style>
     </div>
   );
 };
