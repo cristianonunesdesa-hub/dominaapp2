@@ -10,24 +10,59 @@ export interface LoopResult {
 }
 
 /**
- * Módulo de Validação de Ciclo:
- * Detecta se o rastro atual fechou um polígono por cruzamento ou proximidade.
+ * ENGINE DE CICLO - DOMINA
+ * Responsável por detectar o fechamento de polígonos por cruzamento ou proximidade.
  */
 export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
+  // Precisamos de rastro mínimo para formar um triângulo (mínimo 3 + o novo ponto)
   if (path.length < 3) return null;
 
   const pNew = newLocation;
   const pLast = path[path.length - 1];
 
-  // 1. Verificação por Interseção (Cruzamento do próprio rastro)
-  // Ignora os últimos 3 pontos para evitar falsos positivos de adjacência
-  for (let i = 0; i < path.length - 3; i++) {
+  /**
+   * 1. PRIORIDADE: FECHAMENTO POR PROXIMIDADE (SNAP 50M)
+   * Varremos do início da trilha para o fim para encontrar o ponto MAIS ANTIGO
+   * que satisfaça a tolerância de 50 metros. Isso maximiza a área capturada.
+   */
+  // Ignoramos apenas os últimos 5 pontos para permitir fechamentos rápidos/agressivos
+  const safetyBuffer = 5; 
+  for (let i = 0; i < path.length - safetyBuffer; i++) {
+    const dist = calculateDistance(pNew, path[i]);
+    
+    if (dist <= SNAP_TOLERANCE) {
+      // Ponto de fechamento encontrado por proximidade!
+      // Criamos um polígono que "puxa" o rastro até o ponto histórico i
+      const polygon = [
+        ...path.slice(i),
+        pNew,
+        path[i] // Fecha o elo
+      ];
+
+      const enclosedCellIds = getEnclosedCellIds(polygon);
+
+      // Só validamos o fechamento se ele de fato capturar território
+      if (enclosedCellIds.length > 0) {
+        console.log(`[Cycle] Snap detectado no index ${i} (dist: ${dist.toFixed(1)}m)`);
+        return {
+          polygon,
+          enclosedCellIds,
+          closurePoint: path[i]
+        };
+      }
+    }
+  }
+
+  /**
+   * 2. FECHAMENTO POR INTERSEÇÃO (CRUZAMENTO)
+   * Caso o usuário não passe perto do início, mas cruze o próprio rastro.
+   */
+  for (let i = 0; i < path.length - safetyBuffer; i++) {
     const intersection = getIntersection(pLast, pNew, path[i], path[i + 1]);
     if (intersection) {
-      // Converte a interseção em um Point válido com timestamp para satisfazer a tipagem de LoopResult
       const intersectionPoint: Point = {
         ...intersection,
         timestamp: Date.now()
@@ -38,37 +73,15 @@ export const detectClosedLoop = (
         ...path.slice(i + 1),
         intersectionPoint
       ];
+      
       const enclosedCellIds = getEnclosedCellIds(polygon);
       
       if (enclosedCellIds.length > 0) {
+        console.log(`[Cycle] Interseção detectada no segmento ${i}`);
         return {
           polygon,
           enclosedCellIds,
           closurePoint: intersectionPoint
-        };
-      }
-    }
-  }
-
-  // 2. Verificação por Proximidade (Snap de 50 metros)
-  // Verifica se o usuário chegou perto de qualquer ponto que já passou
-  // Começamos do início da trilha para priorizar fechamentos maiores
-  for (let i = 0; i < path.length - 10; i++) { // Garante que não está dando snap no próprio ponto recente
-    const dist = calculateDistance(pNew, path[i]);
-    if (dist < SNAP_TOLERANCE) {
-      // Cria o polígono fechando do ponto de snap até o local atual e voltando ao snap
-      const polygon = [
-        ...path.slice(i),
-        pNew,
-        path[i]
-      ];
-      const enclosedCellIds = getEnclosedCellIds(polygon);
-
-      if (enclosedCellIds.length > 0) {
-        return {
-          polygon,
-          enclosedCellIds,
-          closurePoint: path[i]
         };
       }
     }

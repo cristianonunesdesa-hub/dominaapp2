@@ -17,7 +17,6 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Cálculo de interseção de segmentos para o "Snap" perfeito (Geoflow™)
 export const getIntersection = (
   p1: {lat: number, lng: number}, p2: {lat: number, lng: number}, 
   p3: {lat: number, lng: number}, p4: {lat: number, lng: number}
@@ -28,12 +27,11 @@ export const getIntersection = (
   const x4 = p4.lng, y4 = p4.lat;
 
   const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (denom === 0) return null; // Paralelos
+  if (Math.abs(denom) < 0.0000000001) return null;
 
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-  // Intersecção ocorre dentro dos limites dos segmentos
   if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
     return {
       lat: y1 + ua * (y2 - y1),
@@ -43,7 +41,6 @@ export const getIntersection = (
   return null;
 };
 
-// Algoritmo Ramer–Douglas–Peucker para simplificação de trilha
 export const simplifyPath = (points: any[], epsilon: number): any[] => {
   if (points.length <= 2) return points;
   
@@ -97,17 +94,19 @@ export const getEnclosedCellIds = (path: {lat: number, lng: number}[]): string[]
     minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
   });
 
-  const startI = Math.floor(minLat / GRID_SIZE);
-  const endI = Math.ceil(maxLat / GRID_SIZE);
-  const startJ = Math.floor(minLng / GRID_SIZE);
-  const endJ = Math.ceil(maxLng / GRID_SIZE);
+  // Margem de segurança para garantir captura de bordas
+  const buffer = GRID_SIZE * 0.5;
+  const startI = Math.floor((minLat - buffer) / GRID_SIZE);
+  const endI = Math.ceil((maxLat + buffer) / GRID_SIZE);
+  const startJ = Math.floor((minLng - buffer) / GRID_SIZE);
+  const endJ = Math.ceil((maxLng + buffer) / GRID_SIZE);
 
   const enclosed: string[] = [];
   for (let i = startI; i <= endI; i++) {
     for (let j = startJ; j <= endJ; j++) {
       const cellLat = i * GRID_SIZE;
       const cellLng = j * GRID_SIZE;
-      // Checa se o centro da célula está dentro do polígono
+      
       if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
         enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
       }
