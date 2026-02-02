@@ -20,6 +20,7 @@ const getPool = () => {
 };
 
 const ensureTables = async (client: any) => {
+  // Criação base
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -31,33 +32,34 @@ const ensureTables = async (client: any) => {
       level INTEGER DEFAULT 1,
       total_area_m2 INTEGER DEFAULT 0,
       cells_owned INTEGER DEFAULT 0,
-      last_lat DOUBLE PRECISION,
-      last_lng DOUBLE PRECISION,
       last_seen BIGINT
     );
+  `);
+
+  // Adição robusta de colunas de localização caso a tabela já exista sem elas
+  await client.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT;
   `);
 };
 
 // ---------- Cor determinística por nickname (hash -> HSL -> HEX) ----------
 const hashString = (str: string): number => {
-  // FNV-1a-ish simples e determinístico
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return h >>> 0; // unsigned
+  return h >>> 0;
 };
 
 const hslToHex = (h: number, s: number, l: number): string => {
-  // h: 0..360, s/l: 0..100
   s /= 100;
   l /= 100;
-
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
-
   let r = 0, g = 0, b = 0;
   if (0 <= h && h < 60) { r = c; g = x; b = 0; }
   else if (60 <= h && h < 120) { r = x; g = c; b = 0; }
@@ -65,28 +67,15 @@ const hslToHex = (h: number, s: number, l: number): string => {
   else if (180 <= h && h < 240) { r = 0; g = x; b = c; }
   else if (240 <= h && h < 300) { r = x; g = 0; b = c; }
   else { r = c; g = 0; b = x; }
-
-  const toHex = (v: number) => {
-    const hex = Math.round((v + m) * 255).toString(16).padStart(2, "0");
-    return hex;
-  };
-
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
 const nicknameToColor = (nickname: string): string => {
   const n = nickname.trim().toUpperCase();
   const h = hashString(n);
-
-  // Hue 0..359
   const hue = h % 360;
-
-  // S e L fixos p/ ficar "tático" e legível no mapa escuro
-  // (se quiser variar levemente: dá pra usar bits do hash)
-  const saturation = 85;
-  const lightness = 55;
-
-  return hslToHex(hue, saturation, lightness);
+  return hslToHex(hue, 85, 55);
 };
 
 const toUserResponse = (row: any) => ({
@@ -110,7 +99,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureTables(client);
-
     const { nickname, password, avatarUrl, action } = req.body;
 
     if (!nickname || !password) {
@@ -123,90 +111,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
     const existingUser = rows[0];
 
-    // =========================
-    // REGISTER
-    // =========================
     if (action === "register") {
       if (existingUser) {
         return res.status(409).json({ error: "Este codinome já está em uso." });
       }
-
       const normalizedNick = nickname.toUpperCase();
       const passwordHash = await bcrypt.hash(password, 10);
-
-      // ✅ cor determinística baseada no nickname
       const color = nicknameToColor(normalizedNick);
-
-      // Avatar padrão (com fundo aproximando a cor)
-      // Dicebear aceita backgroundColor sem '#'
-      const avatar =
-        avatarUrl ||
-        `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(
-          normalizedNick
-        )}&backgroundColor=${color.replace("#", "")}`;
-
-      const newUser = {
-        id: `u_${Date.now()}`,
-        nickname: normalizedNick,
-        password_hash: passwordHash,
-        color,
-        avatar_url: avatar,
-        xp: 0,
-        level: 1,
-        total_area_m2: 0,
-        cells_owned: 0,
-        last_seen: Date.now(),
-      };
+      const avatar = avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(normalizedNick)}&backgroundColor=${color.replace("#", "")}`;
 
       const insert = await client.query(
-        `
-        INSERT INTO users (
-          id, nickname, password_hash, color, avatar_url,
-          xp, level, total_area_m2, cells_owned, last_seen
-        )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        RETURNING *
-      `,
-        [
-          newUser.id,
-          newUser.nickname,
-          newUser.password_hash,
-          newUser.color,
-          newUser.avatar_url,
-          newUser.xp,
-          newUser.level,
-          newUser.total_area_m2,
-          newUser.cells_owned,
-          newUser.last_seen,
-        ]
+        `INSERT INTO users (id, nickname, password_hash, color, avatar_url, xp, level, total_area_m2, cells_owned, last_seen)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         RETURNING *`,
+        [`u_${Date.now()}`, normalizedNick, passwordHash, color, avatar, 0, 1, 0, 0, Date.now()]
       );
-
       return res.status(201).json(toUserResponse(insert.rows[0]));
     }
 
-    // =========================
-    // LOGIN
-    // =========================
-    if (!existingUser) {
-      return res.status(404).json({ error: "Usuário não encontrado." });
-    }
+    if (!existingUser) return res.status(404).json({ error: "Usuário não encontrado." });
 
     const validPassword = await bcrypt.compare(password, existingUser.password_hash);
-    if (!validPassword) {
-      return res.status(401).json({ error: "Senha inválida." });
-    }
+    if (!validPassword) return res.status(401).json({ error: "Senha inválida." });
 
-    // ✅ opcional: garantir que a cor siga determinística (se usuário antigo tiver cor vazia)
     const desiredColor = existingUser.color || nicknameToColor(existingUser.nickname);
-
     const updated = await client.query(
-      `
-      UPDATE users
-      SET last_seen = $2,
-          color = $3
-      WHERE id = $1
-      RETURNING *
-      `,
+      `UPDATE users SET last_seen = $2, color = $3 WHERE id = $1 RETURNING *`,
       [existingUser.id, Date.now(), desiredColor]
     );
 
