@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { calculateDistance, simplifyPath } from './utils';
-import { detectClosedLoop } from './utils/cycle';
-import { XP_PER_KM, XP_PER_SECTOR, MIN_MOVE_DISTANCE, RDP_EPSILON } from './constants';
+import { calculateDistance, simplifyPath } from './core/geo';
+import { detectClosedLoop } from './core/territory';
+import { processLocation } from './core/gps';
+import { MIN_MOVE_DISTANCE, RDP_EPSILON } from './constants';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
@@ -13,9 +14,6 @@ import Login from './components/Login';
 import TestSimulator from './components/TestSimulator';
 import { Globe, Activity as ActivityIcon, MapPinOff, RefreshCw, LogOut } from 'lucide-react';
 import { playVictorySound } from './utils/audio';
-
-const ACCURACY_THRESHOLD = 150; 
-const EMA_ALPHA = 0.25; 
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
@@ -39,17 +37,9 @@ const App: React.FC = () => {
   useEffect(() => { isTestModeRef.current = isTestMode; }, [isTestMode]);
 
   const handleNewLocation = useCallback((rawPoint: Point, force: boolean = false) => {
-    const lastPoint = userLocationRef.current;
-    if (!force && !isTestModeRef.current) {
-        if (rawPoint.accuracy && rawPoint.accuracy > ACCURACY_THRESHOLD && lastPoint) return;
-    }
-
-    if (lastPoint && !force) {
-      const smoothedLat = (rawPoint.lat * EMA_ALPHA) + (lastPoint.lat * (1 - EMA_ALPHA));
-      const smoothedLng = (rawPoint.lng * EMA_ALPHA) + (lastPoint.lng * (1 - EMA_ALPHA));
-      setUserLocation({ lat: smoothedLat, lng: smoothedLng, accuracy: rawPoint.accuracy, timestamp: rawPoint.timestamp });
-    } else {
-      setUserLocation(rawPoint);
+    const processed = processLocation(rawPoint, userLocationRef.current, force || isTestModeRef.current);
+    if (processed) {
+      setUserLocation(processed);
       setGpsError(null);
     }
   }, []);
@@ -63,9 +53,14 @@ const App: React.FC = () => {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         if (isTestModeRef.current) return;
-        handleNewLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: pos.timestamp });
+        handleNewLocation({ 
+          lat: pos.coords.latitude, 
+          lng: pos.coords.longitude, 
+          accuracy: pos.coords.accuracy, 
+          timestamp: pos.timestamp 
+        });
       },
-      (err) => console.debug("GPS Watch:", err.message),
+      (err) => console.debug("GPS Watch Error:", err.message),
       geoOptions
     );
     return watchId;
@@ -140,7 +135,6 @@ const App: React.FC = () => {
       const minDist = isTestMode ? 2 : MIN_MOVE_DISTANCE;
 
       if (d > minDist || rawTrail.length === 0) {
-        // Validação de Ciclo delegada ao novo módulo
         const loop = detectClosedLoop(rawTrail, loc);
         if (loop) {
           handleCapture(loop.enclosedCellIds, loop.closurePoint);
@@ -150,7 +144,12 @@ const App: React.FC = () => {
         setCurrentActivity(prev => {
           if (!prev) return null;
           const newFullPath = [...prev.fullPath, loc];
-          return { ...prev, points: simplifyPath(newFullPath, RDP_EPSILON), fullPath: newFullPath, distanceMeters: prev.distanceMeters + d };
+          return { 
+            ...prev, 
+            points: simplifyPath(newFullPath, RDP_EPSILON), 
+            fullPath: newFullPath, 
+            distanceMeters: prev.distanceMeters + d 
+          };
         });
       }
     }
@@ -185,19 +184,6 @@ const App: React.FC = () => {
         userLocation={userLocation}
         showOverlay={view !== AppState.LOGIN && isIntroReady}
       />
-
-      {!userLocation && view !== AppState.BOOT && view !== AppState.LOGIN && !isTestMode && (
-        <div className="absolute inset-0 z-[7000] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-          <div className="relative mb-12">
-            <div className="w-20 h-20 border-4 border-blue-600/20 border-t-blue-500 rounded-full animate-spin"></div>
-            <MapPinOff className="absolute inset-0 m-auto text-blue-500 animate-pulse" size={32} />
-          </div>
-          <h2 className="text-2xl font-black uppercase italic mb-3 tracking-tighter">Sinal de GPS Ausente</h2>
-          <button onClick={() => window.location.reload()} className="w-full max-w-xs bg-blue-600/20 border border-blue-500/50 py-4 rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase italic tracking-widest active:scale-95 transition-all"><RefreshCw size={14} /> Reconectar</button>
-        </div>
-      )}
-
-      {showConfetti && <ConfettiEffect />}
 
       {view === AppState.HOME && user && userLocation && (
         <div className={`absolute inset-x-0 bottom-0 z-[1500] flex flex-col p-5 pointer-events-none transition-all duration-1000 transform ${isIntroReady ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
