@@ -1,5 +1,5 @@
 
-import { GRID_SIZE } from '../constants';
+import { GRID_SIZE, RDP_EPSILON } from '../constants';
 import { Point } from '../types';
 
 export const getCellId = (lat: number, lng: number): string => {
@@ -55,34 +55,6 @@ export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {la
   return inside;
 };
 
-export const getEnclosedCellIds = (path: {lat: number, lng: number}[]): string[] => {
-  if (path.length < 3) return [];
-  
-  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-  path.forEach(p => {
-    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-    minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
-  });
-
-  const buffer = GRID_SIZE * 0.5;
-  const startI = Math.floor((minLat - buffer) / GRID_SIZE);
-  const endI = Math.ceil((maxLat + buffer) / GRID_SIZE);
-  const startJ = Math.floor((minLng - buffer) / GRID_SIZE);
-  const endJ = Math.ceil((maxLng + buffer) / GRID_SIZE);
-
-  const enclosed: string[] = [];
-  for (let i = startI; i <= endI; i++) {
-    for (let j = startJ; j <= endJ; j++) {
-      const cellLat = i * GRID_SIZE;
-      const cellLng = j * GRID_SIZE;
-      if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
-        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
-      }
-    }
-  }
-  return enclosed;
-};
-
 export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   if (points.length <= 2) return points;
   
@@ -113,4 +85,41 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   } else {
     return [points[0], points[points.length - 1]];
   }
+};
+
+export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
+  if (rawPath.length < 3) return [];
+  
+  // Otimização crucial: Simplifica o polígono antes de calcular as células internas
+  const path = simplifyPath(rawPath, RDP_EPSILON);
+  
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  path.forEach(p => {
+    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
+    minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
+  });
+
+  const buffer = GRID_SIZE * 0.5;
+  const startI = Math.floor((minLat - buffer) / GRID_SIZE);
+  const endI = Math.ceil((maxLat + buffer) / GRID_SIZE);
+  const startJ = Math.floor((minLng - buffer) / GRID_SIZE);
+  const endJ = Math.ceil((maxLng + buffer) / GRID_SIZE);
+
+  // Proteção contra áreas absurdamente grandes (ex: pulos de GPS)
+  if ((endI - startI) * (endJ - startJ) > 50000) {
+     console.warn("[Geo] Área de captura muito grande detectada. Abortando para prevenir travamento.");
+     return [];
+  }
+
+  const enclosed: string[] = [];
+  for (let i = startI; i <= endI; i++) {
+    for (let j = startJ; j <= endJ; j++) {
+      const cellLat = i * GRID_SIZE;
+      const cellLng = j * GRID_SIZE;
+      if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
+        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
+      }
+    }
+  }
+  return enclosed;
 };
