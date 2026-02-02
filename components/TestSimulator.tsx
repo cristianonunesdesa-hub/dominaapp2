@@ -1,6 +1,7 @@
+// Arquivo: components/TestSimulator.tsx
 
 import React, { useState } from 'react';
-import { Zap, MapPin, Navigation2 } from 'lucide-react';
+import { Zap, Navigation2 } from 'lucide-react';
 import { Point } from '../types';
 
 interface TestSimulatorProps {
@@ -9,14 +10,20 @@ interface TestSimulatorProps {
   isEnabled: boolean;
   onToggle: (active: boolean) => void;
   showOverlay: boolean;
+
+  // ✅ NOVO: Autopilot
+  autopilotEnabled: boolean;
+  onAutopilotToggle: (active: boolean) => void;
 }
 
-const TestSimulator: React.FC<TestSimulatorProps> = ({ 
-  onLocationUpdate, 
-  userLocation, 
-  isEnabled, 
+const TestSimulator: React.FC<TestSimulatorProps> = ({
+  onLocationUpdate,
+  userLocation,
+  isEnabled,
   onToggle,
-  showOverlay
+  showOverlay,
+  autopilotEnabled,
+  onAutopilotToggle
 }) => {
   const [isWiping, setIsWiping] = useState(false);
 
@@ -26,17 +33,17 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
     onToggle(true);
     // Teletransporte padrão para teste (Praça da Sé, SP) se não houver local
     if (!userLocation) {
-      onLocationUpdate({ 
-        lat: -23.5505, 
-        lng: -46.6333, 
+      onLocationUpdate({
+        lat: -23.5505,
+        lng: -46.6333,
         timestamp: Date.now(),
-        accuracy: 5 
+        accuracy: 5
       }, true);
     }
   };
 
   const handleWipeDatabase = async () => {
-    if (!confirm("⚠️ ALERTA DE PRODUÇÃO: Deseja zerar TODAS as capturas e usuários do servidor agora?")) return;
+    if (!confirm("⚠️ ALERTA: Deseja zerar TODAS as capturas e usuários do servidor agora?")) return;
     setIsWiping(true);
     try {
       await fetch('/api/sync', {
@@ -56,11 +63,11 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
   return (
     <div className="fixed top-safe left-5 z-[9999] flex flex-col gap-2 pointer-events-none">
       {/* Botão Flutuante de Toggle */}
-      <button 
+      <button
         onClick={() => onToggle(!isEnabled)}
         className={`pointer-events-auto p-3 rounded-2xl border flex items-center gap-2 transition-all shadow-2xl active:scale-95 ${
-          isEnabled 
-            ? 'bg-orange-600 border-white text-white' 
+          isEnabled
+            ? 'bg-orange-600 border-white text-white'
             : 'bg-black/80 border-white/10 text-white/40'
         }`}
       >
@@ -70,7 +77,7 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
         </span>
       </button>
 
-      {/* Painel de Ferramentas (Aparece apenas quando habilitado) */}
+      {/* Painel de Ferramentas */}
       {isEnabled && (
         <div className="pointer-events-auto bg-black/90 backdrop-blur-xl border border-orange-500/30 p-4 rounded-3xl w-48 shadow-2xl animate-in slide-in-from-top-4 duration-300">
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/5">
@@ -79,28 +86,40 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
           </div>
 
           <div className="space-y-2">
-             {!userLocation && (
-               <button 
-                 onClick={handleStartSim}
-                 className="w-full py-2 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter"
-               >
-                 Spawn inicial (Sé)
-               </button>
-             )}
-             
-             <button 
-               onClick={handleWipeDatabase}
-               disabled={isWiping}
-               className="w-full py-2 bg-red-600/20 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-tighter disabled:opacity-50"
-             >
-               {isWiping ? 'WIPING...' : 'WIPE SERVER DATA'}
-             </button>
+            {!userLocation && (
+              <button
+                onClick={handleStartSim}
+                className="w-full py-2 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-tighter"
+              >
+                Spawn inicial (Sé)
+              </button>
+            )}
 
-             <div className="p-2 bg-white/5 rounded-lg">
-                <p className="text-[8px] leading-tight text-orange-400 font-bold uppercase italic">
-                   Instrução: Clique no mapa para simular movimento de caminhada/corrida.
-                </p>
-             </div>
+            <button
+              onClick={handleWipeDatabase}
+              disabled={isWiping}
+              className="w-full py-2 bg-red-600/20 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-tighter disabled:opacity-50"
+            >
+              {isWiping ? 'WIPING...' : 'WIPE SERVER DATA'}
+            </button>
+
+            {/* ✅ AUTO WALK */}
+            <button
+              onClick={() => onAutopilotToggle(!autopilotEnabled)}
+              className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter border transition-all ${
+                autopilotEnabled
+                  ? 'bg-emerald-600 text-white border-white/10'
+                  : 'bg-white/5 text-white/60 border-white/10'
+              }`}
+            >
+              {autopilotEnabled ? 'AUTO WALK: ON' : 'AUTO WALK: OFF'}
+            </button>
+
+            <div className="p-2 bg-white/5 rounded-lg">
+              <p className="text-[8px] leading-tight text-orange-400 font-bold uppercase italic">
+                Instrução: Clique no mapa para definir o destino. O AUTO WALK caminha até lá.
+              </p>
+            </div>
           </div>
         </div>
       )}

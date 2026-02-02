@@ -1,3 +1,5 @@
+// Arquivo: components/GameMap.tsx
+
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { Cell, User, Point } from '../types';
@@ -17,6 +19,7 @@ interface GameMapProps {
 const GameMap: React.FC<GameMapProps> = ({
   userLocation,
   cells,
+  users,
   activeUserId,
   activeUser,
   currentPath = [],
@@ -26,37 +29,45 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
+
+  // Territory shapes
   const territoryShapesRef = useRef<Map<string, L.CircleMarker>>(new Map());
+
+  // Trail + player marker
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const playerMarkerRef = useRef<L.Marker | null>(null);
 
+  // (Opcional) markers de outros jogadores
+  const otherPlayersRef = useRef<Map<string, L.Marker>>(new Map());
+
+  // Init map
   useEffect(() => {
-    if (!mapRef.current) {
-      mapRef.current = L.map('dmn-tactical-map', {
-        zoomControl: false,
-        attributionControl: false,
-        preferCanvas: true,
-        fadeAnimation: false
-      }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 18);
+    if (mapRef.current) return;
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 21,
-        className: 'map-tiles'
-      }).addTo(mapRef.current);
+    mapRef.current = L.map('dmn-tactical-map', {
+      zoomControl: false,
+      attributionControl: false,
+      preferCanvas: true,
+      fadeAnimation: false
+    }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 18);
 
-      canvasLayerRef.current = L.canvas({ padding: 0.5 });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 21,
+      className: 'map-tiles'
+    }).addTo(mapRef.current);
 
-      activeTrailLayerRef.current = L.polyline([], {
-        color: activeUser?.color || '#3B82F6',
-        weight: 6,
-        opacity: 0.8,
-        lineCap: 'round',
-        lineJoin: 'round',
-        renderer: canvasLayerRef.current
-      }).addTo(mapRef.current);
+    canvasLayerRef.current = L.canvas({ padding: 0.5 });
 
-      mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
-    }
+    activeTrailLayerRef.current = L.polyline([], {
+      color: activeUser?.color || '#3B82F6',
+      weight: 6,
+      opacity: 0.8,
+      lineCap: 'round',
+      lineJoin: 'round',
+      renderer: canvasLayerRef.current
+    }).addTo(mapRef.current);
+
+    mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
   }, []);
 
   // ✅ TERRITÓRIO: cria markers novos E ATUALIZA A COR dos que já existem
@@ -74,10 +85,10 @@ const GameMap: React.FC<GameMapProps> = ({
     });
 
     // Cria ou atualiza markers
-    Object.values(cells).forEach((cell: any) => {
+    Object.values(cells).forEach((cell: Cell) => {
       const marker = territoryShapesRef.current.get(cell.id);
 
-      const fillColor = cell.ownerColor || '#4B5563'; // cinza se sem dono
+      const fillColor = cell.ownerColor || '#4B5563';
 
       if (!marker) {
         const [lat, lng] = cell.id.split('_').map(parseFloat);
@@ -93,15 +104,12 @@ const GameMap: React.FC<GameMapProps> = ({
 
         territoryShapesRef.current.set(cell.id, newMarker);
       } else {
-        // ✅ Aqui é o pulo do gato: atualiza cor/dono de células existentes
-        marker.setStyle({
-          fillColor,
-          fillOpacity: 0.8
-        });
+        marker.setStyle({ fillColor, fillOpacity: 0.8 });
       }
     });
   }, [cells]);
 
+  // ✅ Player marker
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
 
@@ -126,12 +134,58 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, [userLocation, introMode]);
 
+  // ✅ Trail
   useEffect(() => {
-    if (activeTrailLayerRef.current) {
-      activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng]));
-      activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
-    }
+    if (!activeTrailLayerRef.current) return;
+    activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng]));
+    activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
   }, [activeTrail, activeUser?.color]);
+
+  // ✅ (Opcional) Outros usuários no mapa (bolinhas coloridas)
+  // Se você não quiser, pode apagar esse useEffect inteiro.
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const ids = new Set(Object.keys(users || {}));
+
+    // Remove markers de usuários que saíram
+    otherPlayersRef.current.forEach((m, id) => {
+      if (!ids.has(id) || id === activeUserId) {
+        m.remove();
+        otherPlayersRef.current.delete(id);
+      }
+    });
+
+    // Cria / atualiza markers dos outros usuários
+    Object.values(users || {}).forEach((u: User) => {
+      if (u.id === activeUserId) return;
+      if (typeof u.lat !== 'number' || typeof u.lng !== 'number') return;
+
+      const existing = otherPlayersRef.current.get(u.id);
+
+      const html = `
+        <div class="relative w-8 h-8 flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full blur-md" style="background:${u.color}55"></div>
+          <div class="w-3 h-3 rounded-full border-2 border-black shadow-lg" style="background:${u.color}"></div>
+        </div>
+      `;
+
+      if (!existing) {
+        const marker = L.marker([u.lat, u.lng], {
+          icon: L.divIcon({
+            className: 'other-player-marker',
+            html,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+          })
+        }).addTo(mapRef.current!);
+
+        otherPlayersRef.current.set(u.id, marker);
+      } else {
+        existing.setLatLng([u.lat, u.lng]);
+      }
+    });
+  }, [users, activeUserId]);
 
   return (
     <>
