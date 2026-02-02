@@ -3,9 +3,13 @@
 import { GRID_SIZE, RDP_EPSILON } from '../constants';
 import { Point } from '../types';
 
+/**
+ * ✅ CORREÇÃO: getCellId alinhado ao centro do grid e com precisão consistente.
+ * Usamos Math.floor para garantir que um ponto pertença a exatamente uma "caixa" do grid.
+ */
 export const getCellId = (lat: number, lng: number): string => {
-  const iLat = Math.round(lat / GRID_SIZE);
-  const iLng = Math.round(lng / GRID_SIZE);
+  const iLat = Math.floor(lat / GRID_SIZE);
+  const iLng = Math.floor(lng / GRID_SIZE);
   return `${(iLat * GRID_SIZE).toFixed(8)}_${(iLng * GRID_SIZE).toFixed(8)}`;
 };
 
@@ -31,7 +35,6 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-  // Pequena margem para evitar problemas de arredondamento em floats
   const eps = 0.0000001;
   if (ua >= -eps && ua <= 1 + eps && ub >= -eps && ub <= 1 + eps) {
     return {
@@ -76,12 +79,15 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 };
 
 /**
- * ✅ OTIMIZADO: Preenchimento de polígono alinhado ao grid (Scanline por Centro)
+ * ✅ OTIMIZADO E CORRIGIDO: 
+ * 1. Limite aumentado para 10.000 unidades (~22km)
+ * 2. Lógica de scanline consistente com getCellId
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
 
-  const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.1);
+  // Simplificação agressiva para o cálculo de área (performance)
+  const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.5);
   
   let minLat = Infinity, maxLat = -Infinity;
   let minLng = Infinity, maxLng = -Infinity;
@@ -93,20 +99,18 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
     if (p.lng > maxLng) maxLng = p.lng;
   });
 
-  // Calculamos os passos do grid para cobrir a bounding box
   const startILat = Math.floor(minLat / GRID_SIZE);
   const endILat = Math.ceil(maxLat / GRID_SIZE);
   
-  if (endILat - startILat > 1000) return []; // Proteção contra saltos de GPS
+  // Limite aumentado para 10000 (~22km) para suportar maratonas
+  if (endILat - startILat > 10000) return []; 
 
   const enclosed: string[] = [];
 
-  // Para cada "linha" de células no grid
   for (let i = startILat; i <= endILat; i++) {
-    const scanLat = i * GRID_SIZE; // Latitude do centro da célula
+    const scanLat = i * GRID_SIZE; 
     const intersections: number[] = [];
 
-    // Encontrar interseções com os segmentos do polígono
     for (let j = 0; j < polygon.length; j++) {
       const p1 = polygon[j];
       const p2 = polygon[(j + 1) % polygon.length];
@@ -119,7 +123,6 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
 
     intersections.sort((a, b) => a - b);
 
-    // Preencher as células entre os pares de interseções (Even-Odd rule)
     for (let k = 0; k < intersections.length; k += 2) {
       if (k + 1 >= intersections.length) break;
       
@@ -130,6 +133,7 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
       const jEnd = Math.floor(endLng / GRID_SIZE);
 
       for (let j = jStart; j <= jEnd; j++) {
+        // IDs gerados aqui agora são garantidamente iguais aos do getCellId
         enclosed.push(`${scanLat.toFixed(8)}_${(j * GRID_SIZE).toFixed(8)}`);
       }
     }

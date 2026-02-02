@@ -17,41 +17,17 @@ const getPool = () => {
   return pool;
 };
 
-const ensureTables = async (client: any, wipe: boolean = false) => {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      nickname TEXT UNIQUE,
-      password_hash TEXT NOT NULL,
-      color TEXT,
-      avatar_url TEXT,
-      xp INTEGER DEFAULT 0,
-      level INTEGER DEFAULT 1,
-      total_area_m2 INTEGER DEFAULT 0,
-      cells_owned INTEGER DEFAULT 0,
-      last_seen BIGINT,
-      last_lat DOUBLE PRECISION,
-      last_lng DOUBLE PRECISION
-    );
-
-    CREATE TABLE IF NOT EXISTS cells (
-      id TEXT PRIMARY KEY,
-      owner_id TEXT,
-      owner_nickname TEXT,
-      updated_at BIGINT
-    );
-  `);
-
-  if (wipe) {
-    await client.query("TRUNCATE TABLE cells;");
-    await client.query("TRUNCATE TABLE users;");
-  }
+// Ofuscação de coordenadas para outros usuários (~11m de precisão)
+const obfuscateCoords = (val: number | null | undefined) => {
+  if (val === null || val === undefined) return null;
+  return Math.round(val * 10000) / 10000;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   if (!dbUrl) return res.status(500).json({ error: "DATABASE_URL não configurada." });
 
+  const authHeader = req.headers.authorization;
   const { userId, location, newCells, stats, wipe } = req.body as SyncPayload;
 
   if (wipe === true && process.env.NODE_ENV !== "development") {
@@ -61,14 +37,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const client = await getPool().connect();
 
   try {
-    await ensureTables(client, wipe === true);
-    if (wipe === true) return res.status(200).json({ message: "Database cleared" });
+    // 1. Validação de Sessão (Obrigatória para operações de escrita)
+    if (!wipe && userId) {
+      const token = authHeader?.split(' ')[1];
+      const { rows: userCheck } = await client.query(
+        "SELECT id FROM users WHERE id = $1 AND session_token = $2",
+        [userId, token]
+      );
+      if (userCheck.length === 0) {
+        return res.status(401).json({ error: "Sessão inválida ou expirada. Faça login novamente." });
+      }
+    }
+
+    if (wipe === true) {
+      await client.query("TRUNCATE TABLE cells;");
+      await client.query("TRUNCATE TABLE users;");
+      return res.status(200).json({ message: "Database cleared" });
+    }
 
     await client.query("BEGIN");
 
     if (userId) {
-      // Upsert de usuário: Atualiza apenas o que é enviado
-      // stats?.cellsOwned mapeia para cells_owned no banco
       await client.query(
         `
         INSERT INTO users (
@@ -81,9 +70,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
         ON CONFLICT (id)
         DO UPDATE SET
-          nickname = COALESCE(EXCLUDED.nickname, users.nickname),
-          color = COALESCE(EXCLUDED.color, users.color),
-          avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
           xp = EXCLUDED.xp,
           level = EXCLUDED.level,
           total_area_m2 = EXCLUDED.total_area_m2,
@@ -94,9 +80,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `,
         [
           userId,
-          stats?.nickname || null,
+          stats?.nickname || 'AGENT_' + userId.slice(-4),
           stats?.color || null,
-          null, // avatar_url (mantém antigo)
+          null,
           stats?.xp ?? 0,
           stats?.level ?? 1,
           stats?.totalAreaM2 ?? 0,
@@ -108,18 +94,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
-    if (newCells && Array.isArray(newCells)) {
-      for (const cell of newCells) {
-        await client.query(
-          `INSERT INTO cells (id, owner_id, owner_nickname, updated_at)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (id) DO UPDATE SET
-             owner_id = EXCLUDED.owner_id,
-             owner_nickname = EXCLUDED.owner_nickname,
-             updated_at = EXCLUDED.updated_at`,
-          [cell.id, cell.ownerId, cell.ownerNickname, Date.now()]
-        );
-      }
+    if (newCells && Array.isArray(newCells) && newCells.length > 0) {
+      const values: any[] = [];
+      const placeholders: string[] = [];
+      const now = Date.now();
+      
+      newCells.forEach((cell, i) => {
+        const offset = i * 4;
+        placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
+        values.push(cell.id, cell.ownerId, cell.ownerNickname, now);
+      });
+
+      await client.query(
+        `INSERT INTO cells (id, owner_id, owner_nickname, updated_at)
+         VALUES ${placeholders.join(', ')}
+         ON CONFLICT (id) DO UPDATE SET
+           owner_id = EXCLUDED.owner_id,
+           owner_nickname = EXCLUDED.owner_nickname,
+           updated_at = EXCLUDED.updated_at`,
+        values
+      );
     }
 
     await client.query("COMMIT");
@@ -134,13 +128,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     const { rows: cellsWithOwners } = await client.query(`
-      SELECT c.id, c.owner_id as "ownerId", u.nickname as "ownerNickname", 
+      SELECT c.id, c.owner_id as "ownerId", 
+             COALESCE(u.nickname, c.owner_nickname) as "ownerNickname", 
              u.color as "ownerColor", c.updated_at as "updatedAt" 
       FROM cells c LEFT JOIN users u ON c.owner_id = u.id
     `);
 
     return res.status(200).json({
-      users: activeUsers,
+      users: activeUsers.map(u => ({
+        ...u,
+        // Ofuscar localização de outros usuários por privacidade
+        lat: u.id === userId ? u.lat : obfuscateCoords(u.lat),
+        lng: u.id === userId ? u.lng : obfuscateCoords(u.lng),
+        xp: Number(u.xp),
+        level: Number(u.level),
+        totalAreaM2: Number(u.totalAreaM2),
+        cellsOwned: Number(u.cellsOwned)
+      })),
       cells: cellsWithOwners.reduce((acc: any, cell: any) => {
         acc[cell.id] = {
           id: cell.id,
@@ -155,7 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err: any) {
     try { await client.query("ROLLBACK"); } catch {}
-    return res.status(500).json({ error: `Erro na sincronização tática: ${err.message}` });
+    return res.status(500).json({ error: `Falha na integridade dos dados: ${err.message}` });
   } finally {
     client.release();
   }

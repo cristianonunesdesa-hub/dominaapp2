@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
+import crypto from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const dbUrl = process.env.DATABASE_URL;
@@ -31,14 +32,15 @@ const ensureTables = async (client: any) => {
       level INTEGER DEFAULT 1,
       total_area_m2 INTEGER DEFAULT 0,
       cells_owned INTEGER DEFAULT 0,
-      last_seen BIGINT
+      last_seen BIGINT,
+      last_lat DOUBLE PRECISION,
+      last_lng DOUBLE PRECISION,
+      session_token TEXT
     );
-  `);
-
-  await client.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT;
+    
+    CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen);
+    CREATE INDEX IF NOT EXISTS idx_users_nickname_lower ON users(LOWER(nickname));
+    CREATE INDEX IF NOT EXISTS idx_users_token ON users(session_token);
   `);
 };
 
@@ -75,18 +77,18 @@ const nicknameToColor = (nickname: string): string => {
   return hslToHex(hue, 85, 55);
 };
 
-// Sanitização robusta: nunca retorna password_hash e unifica camelCase
 const toUserResponse = (row: any) => ({
   id: row.id,
   nickname: row.nickname,
   color: row.color,
   avatarUrl: row.avatar_url,
-  xp: row.xp ?? 0,
-  level: row.level ?? 1,
-  totalAreaM2: row.total_area_m2 ?? 0,
-  cellsOwned: row.cells_owned ?? 0,
+  xp: Number(row.xp ?? 0),
+  level: Number(row.level ?? 1),
+  totalAreaM2: Number(row.total_area_m2 ?? 0),
+  cellsOwned: Number(row.cells_owned ?? 0),
   lat: row.last_lat ?? null,
   lng: row.last_lng ?? null,
+  sessionToken: row.session_token,
   badges: [],
   dailyStreak: 0
 });
@@ -114,6 +116,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
     const existingUser = rows[0];
 
+    // Geração de token seguro no servidor
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+
     if (action === "register") {
       if (existingUser) {
         return res.status(409).json({ error: "Este codinome já está em uso." });
@@ -124,10 +129,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const avatar = avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(normalizedNick)}&backgroundColor=${color.replace("#", "")}`;
 
       const insert = await client.query(
-        `INSERT INTO users (id, nickname, password_hash, color, avatar_url, xp, level, total_area_m2, cells_owned, last_seen)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `INSERT INTO users (id, nickname, password_hash, color, avatar_url, xp, level, total_area_m2, cells_owned, last_seen, session_token)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, $11)
          RETURNING *`,
-        [`u_${Date.now()}`, normalizedNick, passwordHash, color, avatar, 0, 1, 0, 0, Date.now()]
+        [`u_${Date.now()}`, normalizedNick, passwordHash, color, avatar, 0, 1, 0, 0, Date.now(), sessionToken]
       );
       return res.status(201).json(toUserResponse(insert.rows[0]));
     }
@@ -137,10 +142,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const validPassword = await bcrypt.compare(password, existingUser.password_hash);
     if (!validPassword) return res.status(401).json({ error: "Chave de acesso incorreta." });
 
-    const desiredColor = existingUser.color || nicknameToColor(existingUser.nickname);
     const updated = await client.query(
-      `UPDATE users SET last_seen = $2, color = $3 WHERE id = $1 RETURNING *`,
-      [existingUser.id, Date.now(), desiredColor]
+      `UPDATE users SET last_seen = $2, session_token = $3 WHERE id = $1 RETURNING *`,
+      [existingUser.id, Date.now(), sessionToken]
     );
 
     return res.status(200).json(toUserResponse(updated.rows[0]));

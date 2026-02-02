@@ -1,7 +1,7 @@
 // Arquivo: App.tsx
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Cell, Point, Activity, AppState, PublicUser, SyncPayload } from './types';
+import { User, Cell, Point, Activity, AppState, PublicUser, SyncPayload, SyncResponse } from './types';
 import { calculateDistance, simplifyPath } from './core/geo';
 import { detectClosedLoop } from './core/territory';
 import { processLocation } from './core/gps';
@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.LOGIN);
   const [user, setUser] = useState<User | null>(null);
   const [userLocation, setUserLocation] = useState<Point | null>(null);
-  const [globalUsers, setGlobalUsers] = useState<Record<string, User>>({});
+  const [globalUsers, setGlobalUsers] = useState<Record<string, PublicUser>>({});
   const [cells, setCells] = useState<Record<string, Cell>>({});
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
   const [isTestMode, setIsTestMode] = useState(false);
@@ -112,40 +112,60 @@ const App: React.FC = () => {
     return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
   }, [user, view, isTestMode, handleNewLocation]);
 
-  const handleCapture = useCallback((enclosedIds: string[], loc: Point) => {
+  const handleCapture = useCallback(async (enclosedIds: string[], loc: Point) => {
     if (!user) return;
 
-    const newCells: Record<string, Cell> = {};
+    const newCellsDict: Record<string, Cell> = {};
     enclosedIds.forEach(id => {
-      newCells[id] = {
+      newCellsDict[id] = {
         id, ownerId: user.id, ownerNickname: user.nickname, ownerColor: user.color,
         updatedAt: Date.now(), defense: 1
       };
     });
 
-    setCells(prev => ({ ...prev, ...newCells }));
+    setCells(prev => ({ ...prev, ...newCellsDict }));
     playVictorySound();
 
     const syncCellsPayload = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
+    
+    const gainedArea = enclosedIds.length * CELL_AREA_M2;
+    const newStats = {
+      ...user,
+      cellsOwned: (user.cellsOwned || 0) + enclosedIds.length,
+      totalAreaM2: (user.totalAreaM2 || 0) + gainedArea
+    };
+
     const payload: SyncPayload = {
       userId: user.id,
       location: userLocationRef.current,
       newCells: syncCellsPayload,
       stats: {
-        nickname: user.nickname,
-        color: user.color,
-        xp: user.xp,
-        level: user.level,
-        totalAreaM2: user.totalAreaM2,
-        cellsOwned: user.cellsOwned
+        nickname: newStats.nickname,
+        color: newStats.color,
+        xp: newStats.xp,
+        level: newStats.level,
+        totalAreaM2: newStats.totalAreaM2,
+        cellsOwned: newStats.cellsOwned
       }
     };
 
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(err => console.error("Sync error:", err));
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.sessionToken}` 
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (res.status === 401) setView(AppState.LOGIN);
+        throw new Error("Sync capture failed");
+      }
+      setUser(newStats);
+    } catch (err) {
+      console.error("Critical Sync error during capture:", err);
+    }
 
     setCurrentActivity(prev => {
       if (!prev) return null;
@@ -189,48 +209,56 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user || view === AppState.LOGIN) return;
     let stopped = false;
+    
     const poll = async () => {
       try {
         if (!user || stopped) return;
+        
         const payload: SyncPayload = {
           userId: user.id,
           location: userLocationRef.current,
-          stats: {
-            nickname: user.nickname,
-            color: user.color,
-            xp: user.xp ?? 0,
-            level: user.level ?? 1,
-            totalAreaM2: user.totalAreaM2 ?? 0,
-            cellsOwned: user.cellsOwned ?? 0
-          }
         };
+
         const res = await fetch('/api/sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.sessionToken}`
+          },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) return;
-        const data = await res.json();
+        
+        if (!res.ok) {
+          if (res.status === 401) setView(AppState.LOGIN);
+          return;
+        }
+        const data: SyncResponse = await res.json();
+        
         if (stopped) return;
+        
         if (data.cells) setCells(data.cells);
+        
         if (Array.isArray(data.users)) {
-          const usersMap: Record<string, User> = {};
-          data.users.forEach((u: any) => {
+          const usersMap: Record<string, PublicUser> = {};
+          data.users.forEach((u) => {
             usersMap[u.id] = {
               id: u.id, nickname: u.nickname, color: u.color, avatarUrl: u.avatarUrl,
-              xp: u.xp ?? 0, level: u.level ?? 1, totalAreaM2: u.totalAreaM2 ?? 0,
-              cellsOwned: u.cellsOwned ?? 0, badges: [], dailyStreak: 0,
+              xp: u.xp, level: u.level, totalAreaM2: u.totalAreaM2,
+              cellsOwned: u.cellsOwned,
               lat: u.lat, lng: u.lng
             };
           });
           setGlobalUsers(usersMap);
         }
-      } catch {}
+      } catch (err) {
+        console.warn("Polling silent fail:", err);
+      }
     };
+
     poll();
     const interval = setInterval(() => { if (!stopped) poll(); }, 2500);
     return () => { stopped = true; clearInterval(interval); };
-  }, [view, user]);
+  }, [view, user?.id, user?.sessionToken]);
 
   const startActivity = () => {
     setCurrentActivity({
@@ -246,11 +274,13 @@ const App: React.FC = () => {
     setView(AppState.SUMMARY);
   };
 
-  const finishMission = () => {
+  const finishMission = async () => {
     if (!user || !currentActivity) { setView(AppState.HOME); return; }
+    
     const capturedCount = currentActivity.capturedCellIds.size;
     const gainedArea = capturedCount * CELL_AREA_M2;
     const gainedXp = calculateSessionXp(currentActivity.distanceMeters, capturedCount);
+    
     const newXp = (user.xp ?? 0) + gainedXp;
     const newLevel = calculateLevelFromXp(newXp);
     const newTotalArea = (user.totalAreaM2 ?? 0) + gainedArea;
@@ -259,7 +289,6 @@ const App: React.FC = () => {
     const updatedUser: User = {
       ...user, xp: newXp, level: newLevel, totalAreaM2: newTotalArea, cellsOwned: newCellsOwned
     };
-    setUser(updatedUser);
 
     const payload: SyncPayload = {
       userId: user.id,
@@ -270,11 +299,20 @@ const App: React.FC = () => {
       }
     };
 
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.sessionToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+      setUser(updatedUser);
+    } catch (err) {
+      console.error("Final mission sync failed:", err);
+    }
+    
     setView(AppState.HOME);
   };
 
@@ -305,7 +343,7 @@ const App: React.FC = () => {
                 <div className="text-[10px] text-blue-500 font-bold tracking-widest mt-0.5">AGENTE NÍVEL {user.level}</div>
               </div>
             </div>
-            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-3 bg-white/5 rounded-2xl border border-white/10 active:scale-90 transition-all">
+            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-3 bg-white/5 rounded-2xl border border-white/10 active:scale-90 transition-all pointer-events-auto">
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
             </button>
           </div>
@@ -314,7 +352,7 @@ const App: React.FC = () => {
       )}
       {view === AppState.ACTIVE && currentActivity && <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />}
       {view === AppState.SUMMARY && currentActivity && user && <MissionSummary activity={currentActivity} user={user} onFinish={finishMission} />}
-      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers).map((u: User) => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2, level: u.level, color: u.color, avatarUrl: u.avatarUrl }))} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
+      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers).map((u) => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2, level: u.level, color: u.color, avatarUrl: u.avatarUrl }))} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
       <TestSimulator isEnabled={isTestMode} onToggle={setIsTestMode} onLocationUpdate={handleNewLocation} userLocation={userLocation} showOverlay={view !== AppState.LOGIN} autopilotEnabled={testAutopilot} onAutopilotToggle={(active) => active ? startTestAutopilot() : stopTestAutopilot()} />
     </div>
   );

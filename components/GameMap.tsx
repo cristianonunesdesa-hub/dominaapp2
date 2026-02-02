@@ -1,13 +1,13 @@
 // Arquivo: components/GameMap.tsx
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import L from 'leaflet';
-import { Cell, User, Point } from '../types';
+import { Cell, User, Point, PublicUser } from '../types';
 
 interface GameMapProps {
   userLocation: Point | null;
   cells: Record<string, Cell>;
-  users: Record<string, User>;
+  users: Record<string, PublicUser>;
   activeUserId: string;
   activeUser: User | null;
   currentPath: Point[];
@@ -29,15 +29,12 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const canvasLayerRef = useRef<L.Canvas | null>(null);
-
-  // Territory shapes
+  
+  // Trackers de estado para evitar re-renders pesados
+  const lastCellCountRef = useRef<number>(0);
   const territoryShapesRef = useRef<Map<string, L.CircleMarker>>(new Map());
-
-  // Trail + player marker
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const playerMarkerRef = useRef<L.Marker | null>(null);
-
-  // Outros usuários (bolinhas)
   const otherPlayersRef = useRef<Map<string, L.Marker>>(new Map());
 
   // Init map
@@ -48,7 +45,8 @@ const GameMap: React.FC<GameMapProps> = ({
       zoomControl: false,
       attributionControl: false,
       preferCanvas: true,
-      fadeAnimation: false
+      fadeAnimation: false,
+      zoomSnap: 0.5,
     }).setView([userLocation?.lat || -23.5505, userLocation?.lng || -46.6333], 18);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -70,40 +68,43 @@ const GameMap: React.FC<GameMapProps> = ({
     mapRef.current.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
   }, []);
 
-  // ✅ TERRITÓRIO OTIMIZADO: Diffing de cores e loop de alta performance
+  // ✅ TERRITÓRIO OTIMIZADO
   useEffect(() => {
     if (!mapRef.current || !canvasLayerRef.current) return;
 
+    const cellIds = Object.keys(cells);
+    if (cellIds.length === lastCellCountRef.current && cellIds.length > 0) {
+      const firstId = cellIds[0];
+      if (territoryShapesRef.current.get(firstId)?.options.fillColor === cells[firstId].ownerColor) {
+        return; 
+      }
+    }
+    
+    lastCellCountRef.current = cellIds.length;
     const visitedIds = new Set<string>();
-    const currentCells = cells;
     const shapes = territoryShapesRef.current;
 
-    // Usamos for...in por ser mais rápido que Object.values em objetos com milhares de chaves
-    for (const id in currentCells) {
-      const cell = currentCells[id];
+    for (const id of cellIds) {
+      const cell = cells[id];
       visitedIds.add(id);
       
       const marker = shapes.get(id);
       const fillColor = cell.ownerColor || '#4B5563';
 
       if (!marker) {
-        // Criar marker novo apenas se não existir
         const [lat, lng] = id.split('_').map(parseFloat);
         const newMarker = L.circleMarker([lat, lng], {
-          radius: 3,
+          radius: 3.5,
           stroke: false,
           fillColor,
-          fillOpacity: 0.8,
+          fillOpacity: 0.85,
           renderer: canvasLayerRef.current!,
           interactive: false
         }).addTo(mapRef.current!);
 
-        // Guardamos a última cor para evitar setStyle desnecessário no futuro
         (newMarker as any)._lastColor = fillColor;
         shapes.set(id, newMarker);
       } else {
-        // Atualiza a cor APENAS se houver mudança real
-        // setStyle é uma operação pesada no Leaflet (recalcula path no canvas)
         if ((marker as any)._lastColor !== fillColor) {
           marker.setStyle({ fillColor });
           (marker as any)._lastColor = fillColor;
@@ -111,7 +112,6 @@ const GameMap: React.FC<GameMapProps> = ({
       }
     }
 
-    // Remoção eficiente de markers obsoletos
     shapes.forEach((marker, id) => {
       if (!visitedIds.has(id)) {
         marker.remove();
@@ -120,7 +120,7 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells]);
 
-  // ✅ Player marker (você)
+  // ✅ Player marker
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
 
@@ -143,17 +143,16 @@ const GameMap: React.FC<GameMapProps> = ({
     if (!introMode) {
       mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true });
     }
-  }, [userLocation, introMode]);
+  }, [userLocation?.lat, userLocation?.lng, introMode]);
 
-  // ✅ Trail (linha do rastro)
+  // ✅ Trail
   useEffect(() => {
     if (!activeTrailLayerRef.current) return;
-
     activeTrailLayerRef.current.setLatLngs(activeTrail.map(p => [p.lat, p.lng]));
     activeTrailLayerRef.current.setStyle({ color: activeUser?.color || '#3B82F6' });
-  }, [activeTrail, activeUser?.color]);
+  }, [activeTrail.length, activeUser?.color]);
 
-  // ✅ Outros usuários: bolinhas coloridas
+  // ✅ Outros usuários
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -161,15 +160,7 @@ const GameMap: React.FC<GameMapProps> = ({
     const others = otherPlayersRef.current;
 
     others.forEach((m, id) => {
-      const u = users[id];
-      const invalid =
-        !ids.has(id) ||
-        id === activeUserId ||
-        !u ||
-        typeof u.lat !== 'number' ||
-        typeof u.lng !== 'number';
-
-      if (invalid) {
+      if (!ids.has(id) || id === activeUserId) {
         m.remove();
         others.delete(id);
       }
@@ -177,29 +168,21 @@ const GameMap: React.FC<GameMapProps> = ({
 
     for (const id in users) {
       const u = users[id];
-      if (u.id === activeUserId) continue;
-      if (typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
+      if (id === activeUserId || !u.lat || !u.lng) continue;
 
-      const existing = others.get(u.id);
-      const html = `
-        <div class="relative w-8 h-8 flex items-center justify-center">
+      const marker = others.get(id);
+      const html = `<div class="relative w-8 h-8 flex items-center justify-center">
           <div class="absolute inset-0 rounded-full blur-md" style="background:${u.color}55"></div>
           <div class="w-3 h-3 rounded-full border-2 border-black shadow-lg" style="background:${u.color}"></div>
-        </div>
-      `;
+        </div>`;
 
-      if (!existing) {
-        const marker = L.marker([u.lat, u.lng], {
-          icon: L.divIcon({
-            className: 'other-player-marker',
-            html,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-          })
+      if (!marker) {
+        const newM = L.marker([u.lat, u.lng], {
+          icon: L.divIcon({ className: 'other-player-marker', html, iconSize: [32, 32], iconAnchor: [16, 16] })
         }).addTo(mapRef.current!);
-        others.set(u.id, marker);
+        others.set(id, newM);
       } else {
-        existing.setLatLng([u.lat, u.lng]);
+        marker.setLatLng([u.lat, u.lng]);
       }
     }
   }, [users, activeUserId]);
@@ -208,11 +191,11 @@ const GameMap: React.FC<GameMapProps> = ({
     <>
       <style>{`
         .leaflet-container { background: #0a0a0a !important; }
-        .map-tiles { filter: brightness(0.6) invert(90%) contrast(1.2); }
+        .map-tiles { filter: brightness(0.6) invert(90%) contrast(1.2) grayscale(0.5); }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full" />
     </>
   );
 };
 
-export default GameMap;
+export default memo(GameMap);
