@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Cell, Point, Activity, AppState } from './types';
-import { calculateDistance, getEnclosedCellIds, simplifyPath, getIntersection } from './utils';
-import { XP_PER_KM, XP_PER_SECTOR, MIN_MOVE_DISTANCE, RDP_EPSILON, SNAP_TOLERANCE } from './constants';
+import { calculateDistance, simplifyPath } from './utils';
+import { detectClosedLoop } from './utils/cycle';
+import { XP_PER_KM, XP_PER_SECTOR, MIN_MOVE_DISTANCE, RDP_EPSILON } from './constants';
 import GameMap from './components/GameMap';
 import ActivityOverlay from './components/ActivityOverlay';
 import ConfettiEffect from './components/ConfettiEffect';
@@ -39,8 +40,6 @@ const App: React.FC = () => {
 
   const handleNewLocation = useCallback((rawPoint: Point, force: boolean = false) => {
     const lastPoint = userLocationRef.current;
-    
-    // Filtro de precisão (Ignorado em modo teste para agilidade)
     if (!force && !isTestModeRef.current) {
         if (rawPoint.accuracy && rawPoint.accuracy > ACCURACY_THRESHOLD && lastPoint) return;
     }
@@ -109,7 +108,7 @@ const App: React.FC = () => {
     }
   }, [view]);
 
-  const captureArea = useCallback((polygonPoints: Point[], loc: Point, enclosedIds: string[]) => {
+  const handleCapture = useCallback((enclosedIds: string[], loc: Point) => {
     if (!user) return;
     const newCellsForSync = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
     const captured: Record<string, Cell> = enclosedIds.reduce((acc, id) => ({
@@ -141,29 +140,11 @@ const App: React.FC = () => {
       const minDist = isTestMode ? 2 : MIN_MOVE_DISTANCE;
 
       if (d > minDist || rawTrail.length === 0) {
-        const nextRawTrail = [...rawTrail, loc];
-        
-        if (nextRawTrail.length > 3) {
-          const pNew = nextRawTrail[nextRawTrail.length - 1];
-          const pLast = nextRawTrail[nextRawTrail.length - 2];
-          for (let i = 0; i < nextRawTrail.length - 3; i++) {
-            const intersection = getIntersection(pLast, pNew, nextRawTrail[i], nextRawTrail[i+1]);
-            if (intersection) {
-              const poly = [intersection, ...nextRawTrail.slice(i + 1, -1), intersection];
-              const ids = getEnclosedCellIds(poly);
-              if (ids.length > 0) { captureArea(poly, loc, ids); return; }
-            }
-          }
-        }
-
-        if (nextRawTrail.length > 10) {
-          for (let i = 0; i < nextRawTrail.length - 10; i++) {
-            if (calculateDistance(loc, nextRawTrail[i]) < SNAP_TOLERANCE) {
-              const poly = [...nextRawTrail.slice(i, -1), nextRawTrail[i]];
-              const ids = getEnclosedCellIds(poly);
-              if (ids.length > 0) { captureArea(poly, loc, ids); return; }
-            }
-          }
+        // Validação de Ciclo delegada ao novo módulo
+        const loop = detectClosedLoop(rawTrail, loc);
+        if (loop) {
+          handleCapture(loop.enclosedCellIds, loop.closurePoint);
+          return;
         }
 
         setCurrentActivity(prev => {
@@ -173,7 +154,7 @@ const App: React.FC = () => {
         });
       }
     }
-  }, [userLocation, view, user, captureArea, isTestMode]);
+  }, [userLocation, view, user, handleCapture, isTestMode]);
 
   const handleLogout = () => {
     setUser(null);
