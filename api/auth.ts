@@ -21,6 +21,7 @@ const getPool = () => {
 };
 
 const ensureTables = async (client: any) => {
+  // 1. Cria a tabela base caso não exista
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -37,11 +38,29 @@ const ensureTables = async (client: any) => {
       last_lng DOUBLE PRECISION,
       session_token TEXT
     );
-    
-    CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen);
-    CREATE INDEX IF NOT EXISTS idx_users_nickname_lower ON users(LOWER(nickname));
-    CREATE INDEX IF NOT EXISTS idx_users_token ON users(session_token);
   `);
+
+  // 2. Migração: Adiciona colunas que podem estar faltando em instalações antigas
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS session_token TEXT;`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT;`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`);
+
+  // 3. Garante que a tabela de células também exista
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS cells (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT,
+      owner_nickname TEXT,
+      updated_at BIGINT
+    );
+  `);
+  
+  // 4. Cria índices para performance
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users(last_seen);`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_users_nickname_lower ON users(LOWER(nickname));`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_users_token ON users(session_token);`);
 };
 
 const hashString = (str: string): number => {
