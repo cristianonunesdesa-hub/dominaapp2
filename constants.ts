@@ -9,10 +9,10 @@ export const XP_PER_CITADEL = 50;
 export const LEVEL_XP_BASE = 1000;
 
 // Configurações do Pipeline Geoflow™
-export const MIN_MOVE_DISTANCE = 6;    // Mínimo de 6m para registrar novo vértice
+export const MIN_MOVE_DISTANCE = 5;    // Reduzido para 5m para maior precisão em curvas
 export const MAX_IDLE_TIME = 4000;     // 4s sem movimento força atualização
 export const RDP_EPSILON = 0.000015;   // Tolerância de simplificação (~1.5m)
-export const SNAP_TOLERANCE = 50;      // Proximidade para snap automático em metros (Solicitado: 50m)
+export const SNAP_TOLERANCE = 20;      // Proximidade para snap automático em metros (Solicitado: 20m)
 
 export const COLORS = {
   PRIMARY: '#3B82F6', 
