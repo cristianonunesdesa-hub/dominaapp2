@@ -1,7 +1,7 @@
 // Arquivo: App.tsx
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Cell, Point, Activity, AppState } from './types';
+import { User, Cell, Point, Activity, AppState, PublicUser, SyncPayload } from './types';
 import { calculateDistance, simplifyPath } from './core/geo';
 import { detectClosedLoop } from './core/territory';
 import { processLocation } from './core/gps';
@@ -112,7 +112,6 @@ const App: React.FC = () => {
     return () => { if (watchId !== null) navigator.geolocation.clearWatch(watchId); };
   }, [user, view, isTestMode, handleNewLocation]);
 
-  // handleCapture corrigido: Depende de 'user' para garantir que o sync nunca envie 'UNKNOWN'
   const handleCapture = useCallback((enclosedIds: string[], loc: Point) => {
     if (!user) return;
 
@@ -120,30 +119,32 @@ const App: React.FC = () => {
     enclosedIds.forEach(id => {
       newCells[id] = {
         id, ownerId: user.id, ownerNickname: user.nickname, ownerColor: user.color,
-        bounds: [0, 0, 0, 0], updatedAt: Date.now(), defense: 1
+        updatedAt: Date.now(), defense: 1
       };
     });
 
     setCells(prev => ({ ...prev, ...newCells }));
     playVictorySound();
 
-    const syncData = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
+    const syncCellsPayload = enclosedIds.map(id => ({ id, ownerId: user.id, ownerNickname: user.nickname }));
+    const payload: SyncPayload = {
+      userId: user.id,
+      location: userLocationRef.current,
+      newCells: syncCellsPayload,
+      stats: {
+        nickname: user.nickname,
+        color: user.color,
+        xp: user.xp,
+        level: user.level,
+        totalAreaM2: user.totalAreaM2,
+        cellsOwned: user.cellsOwned
+      }
+    };
+
     fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        location: userLocationRef.current,
-        newCells: syncData,
-        stats: {
-          nickname: user.nickname,
-          color: user.color,
-          xp: user.xp,
-          level: user.level,
-          totalAreaM2: user.totalAreaM2,
-          cellsOwned: user.cellsOwned
-        }
-      })
+      body: JSON.stringify(payload)
     }).catch(err => console.error("Sync error:", err));
 
     setCurrentActivity(prev => {
@@ -186,38 +187,12 @@ const App: React.FC = () => {
   }, [userLocation, view, isProcessing, isTestMode, currentActivity, handleCapture]);
 
   useEffect(() => {
-    if (user && view === AppState.HOME) {
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
-      })
-        .then(r => r.json())
-        .then(data => {
-          if (data.cells) setCells(data.cells);
-          if (Array.isArray(data.users)) {
-            const usersMap: Record<string, User> = {};
-            data.users.forEach((u: any) => {
-              usersMap[u.id] = {
-                id: u.id, nickname: u.nickname, color: u.color, avatarUrl: u.avatarUrl,
-                xp: u.xp ?? 0, level: u.level ?? 1, totalAreaM2: u.totalAreaM2 ?? 0,
-                cellsOwned: u.cellsOwned ?? 0, badges: [], dailyStreak: 0,
-                lat: u.lat, lng: u.lng
-              };
-            });
-            setGlobalUsers(usersMap);
-          }
-        });
-    }
-  }, [user, view]);
-
-  useEffect(() => {
     if (!user || view === AppState.LOGIN) return;
     let stopped = false;
     const poll = async () => {
       try {
         if (!user || stopped) return;
-        const payload = {
+        const payload: SyncPayload = {
           userId: user.id,
           location: userLocationRef.current,
           stats: {
@@ -240,12 +215,12 @@ const App: React.FC = () => {
         if (data.cells) setCells(data.cells);
         if (Array.isArray(data.users)) {
           const usersMap: Record<string, User> = {};
-          data.users.forEach((srv: any) => {
-            usersMap[srv.id] = {
-              id: srv.id, nickname: srv.nickname, color: srv.color, avatarUrl: srv.avatarUrl,
-              xp: srv.xp ?? 0, level: srv.level ?? 1, totalAreaM2: srv.totalAreaM2 ?? 0,
-              cellsOwned: srv.cellsOwned ?? 0, badges: [], dailyStreak: 0,
-              lat: srv.lat, lng: srv.lng
+          data.users.forEach((u: any) => {
+            usersMap[u.id] = {
+              id: u.id, nickname: u.nickname, color: u.color, avatarUrl: u.avatarUrl,
+              xp: u.xp ?? 0, level: u.level ?? 1, totalAreaM2: u.totalAreaM2 ?? 0,
+              cellsOwned: u.cellsOwned ?? 0, badges: [], dailyStreak: 0,
+              lat: u.lat, lng: u.lng
             };
           });
           setGlobalUsers(usersMap);
@@ -286,16 +261,19 @@ const App: React.FC = () => {
     };
     setUser(updatedUser);
 
+    const payload: SyncPayload = {
+      userId: user.id,
+      location: userLocationRef.current,
+      stats: {
+        nickname: user.nickname, color: user.color,
+        xp: newXp, level: newLevel, totalAreaM2: newTotalArea, cellsOwned: newCellsOwned
+      }
+    };
+
     fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id, location: userLocationRef.current,
-        stats: {
-          nickname: user.nickname, color: user.color,
-          xp: newXp, level: newLevel, totalAreaM2: newTotalArea, cellsOwned: newCellsOwned
-        }
-      })
+      body: JSON.stringify(payload)
     });
     setView(AppState.HOME);
   };

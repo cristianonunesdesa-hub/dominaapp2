@@ -20,7 +20,6 @@ const getPool = () => {
 };
 
 const ensureTables = async (client: any) => {
-  // Criação base
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -36,7 +35,6 @@ const ensureTables = async (client: any) => {
     );
   `);
 
-  // Adição robusta de colunas de localização caso a tabela já exista sem elas
   await client.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;
@@ -44,7 +42,6 @@ const ensureTables = async (client: any) => {
   `);
 };
 
-// ---------- Cor determinística por nickname (hash -> HSL -> HEX) ----------
 const hashString = (str: string): number => {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -78,6 +75,7 @@ const nicknameToColor = (nickname: string): string => {
   return hslToHex(hue, 85, 55);
 };
 
+// Sanitização robusta: nunca retorna password_hash e unifica camelCase
 const toUserResponse = (row: any) => ({
   id: row.id,
   nickname: row.nickname,
@@ -86,9 +84,11 @@ const toUserResponse = (row: any) => ({
   xp: row.xp ?? 0,
   level: row.level ?? 1,
   totalAreaM2: row.total_area_m2 ?? 0,
-  cells_owned: row.cells_owned ?? 0,
+  cellsOwned: row.cells_owned ?? 0,
   lat: row.last_lat ?? null,
   lng: row.last_lng ?? null,
+  badges: [],
+  dailyStreak: 0
 });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -101,8 +101,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureTables(client);
     const { nickname, password, avatarUrl, action } = req.body;
 
-    if (!nickname || !password) {
-      return res.status(400).json({ error: "Nickname e senha são obrigatórios." });
+    if (!nickname || nickname.length < 3 || nickname.length > 20) {
+      return res.status(400).json({ error: "Codinome deve ter entre 3 e 20 caracteres." });
+    }
+    if (!password || password.length < 4) {
+      return res.status(400).json({ error: "Chave de acesso muito curta (mín. 4)." });
     }
 
     const { rows } = await client.query(
@@ -132,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existingUser) return res.status(404).json({ error: "Usuário não encontrado." });
 
     const validPassword = await bcrypt.compare(password, existingUser.password_hash);
-    if (!validPassword) return res.status(401).json({ error: "Senha inválida." });
+    if (!validPassword) return res.status(401).json({ error: "Chave de acesso incorreta." });
 
     const desiredColor = existingUser.color || nicknameToColor(existingUser.nickname);
     const updated = await client.query(
@@ -142,7 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json(toUserResponse(updated.rows[0]));
   } catch (err: any) {
-    return res.status(500).json({ error: `Erro terminal: ${err.message}` });
+    return res.status(500).json({ error: `Falha no sistema de autenticação: ${err.message}` });
   } finally {
     client.release();
   }

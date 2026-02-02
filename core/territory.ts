@@ -1,3 +1,4 @@
+// Arquivo: core/territory.ts
 
 import { Point } from '../types';
 import { SNAP_TOLERANCE } from '../constants';
@@ -10,54 +11,30 @@ export interface LoopResult {
 }
 
 /**
- * detectClosedLoop - NOVA VERSÃO DO ZERO
- * Detecta se o movimento atual fechou um polígono.
+ * detectClosedLoop
+ * Analisa o rastro para detectar se o usuário fechou uma área.
  */
 export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  // Mínimo de pontos para formar um polígono válido (triângulo + retorno = 4+)
-  // Usamos 10 para evitar ruído de micro-movimentos
-  if (path.length < 10) return null;
+  // Mínimo de pontos significativos para evitar micro-loops por ruído
+  if (path.length < 12) return null;
 
   const pCurrent = newLocation;
   const pLast = path[path.length - 1];
   
-  // 1. DEFINIÇÃO DO BUFFER DE SEGURANÇA
-  // Não podemos fechar o circuito nos pontos que acabamos de criar (últimos 30-50 metros)
-  // Assumindo pontos a cada 2-5 metros, ignoramos os últimos 15 pontos.
-  const safetyBuffer = 15;
+  // Buffer de segurança: Não podemos cruzar com os pontos "frescos" (últimos ~100 metros)
+  // Isso evita que o GPS detecte fechamento enquanto o usuário apenas corre em linha reta.
+  const safetyBuffer = 18; 
+  if (path.length <= safetyBuffer) return null;
+  
   const searchablePath = path.slice(0, path.length - safetyBuffer);
 
-  if (searchablePath.length < 3) return null;
-
   /**
-   * MÉTODO A: SNAP POR PROXIMIDADE (20 Metros)
-   * Ideal para quando o usuário chega perto do ponto inicial mas não cruza a linha.
+   * MODO 1: CRUZAMENTO DE LINHAS (Interseção exata)
+   * O usuário cortou o próprio rastro.
    */
-  for (let i = 0; i < searchablePath.length; i++) {
-    const dist = calculateDistance(pCurrent, searchablePath[i]);
-    if (dist <= SNAP_TOLERANCE) {
-      // Fechamento detectado!
-      const polygon = [...path.slice(i), pCurrent, searchablePath[i]];
-      const enclosedCellIds = getEnclosedCellIds(polygon);
-
-      if (enclosedCellIds.length > 0) {
-        return {
-          polygon,
-          enclosedCellIds,
-          closurePoint: searchablePath[i]
-        };
-      }
-    }
-  }
-
-  /**
-   * MÉTODO B: INTERSEÇÃO DE SEGMENTOS (CRUZAMENTO DE LINHA)
-   * Ideal para quando o usuário corta o próprio rastro.
-   */
-  // O segmento atual é de pLast para pCurrent
   for (let i = 0; i < searchablePath.length - 1; i++) {
     const pA = searchablePath[i];
     const pB = searchablePath[i + 1];
@@ -65,15 +42,36 @@ export const detectClosedLoop = (
     const intersection = getIntersection(pLast, pCurrent, pA, pB);
     
     if (intersection) {
-      // O polígono é formado do ponto de interseção até o rastro atual
+      // O polígono começa na interseção, segue o rastro até o fim, e fecha na interseção
       const polygon = [intersection, ...path.slice(i + 1), intersection];
-      const enclosedCellIds = getEnclosedCellIds(polygon);
+      const enclosed = getEnclosedCellIds(polygon);
 
-      if (enclosedCellIds.length > 0) {
+      if (enclosed.length > 0) {
         return {
           polygon,
-          enclosedCellIds,
+          enclosedCellIds: enclosed,
           closurePoint: intersection
+        };
+      }
+    }
+  }
+
+  /**
+   * MODO 2: SNAP POR PROXIMIDADE (Fechamento Magnético)
+   * O usuário chegou muito perto do início/rastro sem cruzar a linha.
+   */
+  for (let i = 0; i < searchablePath.length; i++) {
+    const dist = calculateDistance(pCurrent, searchablePath[i]);
+    if (dist <= SNAP_TOLERANCE) {
+      // Cria um polígono fechando do ponto atual para o ponto do rastro detectado
+      const polygon = [...path.slice(i), pCurrent, searchablePath[i]];
+      const enclosed = getEnclosedCellIds(polygon);
+
+      if (enclosed.length > 0) {
+        return {
+          polygon,
+          enclosedCellIds: enclosed,
+          closurePoint: searchablePath[i]
         };
       }
     }

@@ -1,5 +1,8 @@
+// Arquivo: api/sync.ts
+
 import { Pool } from "pg";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { SyncPayload } from "../types";
 
 const dbUrl = process.env.DATABASE_URL;
 let pool: Pool | null = null;
@@ -26,7 +29,9 @@ const ensureTables = async (client: any, wipe: boolean = false) => {
       level INTEGER DEFAULT 1,
       total_area_m2 INTEGER DEFAULT 0,
       cells_owned INTEGER DEFAULT 0,
-      last_seen BIGINT
+      last_seen BIGINT,
+      last_lat DOUBLE PRECISION,
+      last_lng DOUBLE PRECISION
     );
 
     CREATE TABLE IF NOT EXISTS cells (
@@ -35,12 +40,6 @@ const ensureTables = async (client: any, wipe: boolean = false) => {
       owner_nickname TEXT,
       updated_at BIGINT
     );
-  `);
-
-  await client.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lat DOUBLE PRECISION;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_lng DOUBLE PRECISION;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT;
   `);
 
   if (wipe) {
@@ -53,10 +52,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   if (!dbUrl) return res.status(500).json({ error: "DATABASE_URL não configurada." });
 
-  const { userId, location, newCells, stats, wipe } = req.body;
+  const { userId, location, newCells, stats, wipe } = req.body as SyncPayload;
 
   if (wipe === true && process.env.NODE_ENV !== "development") {
-    return res.status(403).json({ error: "Wipe bloqueado." });
+    return res.status(403).json({ error: "Wipe restrito a ambiente de desenvolvimento." });
   }
 
   const client = await getPool().connect();
@@ -68,10 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await client.query("BEGIN");
 
     if (userId) {
-      const nickname = stats?.nickname || null;
-      const color = stats?.color || null;
-
-      // Corrigido: Não usamos COALESCE no VALUES para permitir que o ON CONFLICT decida se deve atualizar ou manter o antigo
+      // Upsert de usuário: Atualiza apenas o que é enviado
+      // stats?.cellsOwned mapeia para cells_owned no banco
       await client.query(
         `
         INSERT INTO users (
@@ -97,9 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `,
         [
           userId,
-          nickname,
-          color,
-          null, // avatar_url
+          stats?.nickname || null,
+          stats?.color || null,
+          null, // avatar_url (mantém antigo)
           stats?.xp ?? 0,
           stats?.level ?? 1,
           stats?.totalAreaM2 ?? 0,
@@ -145,13 +142,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       users: activeUsers,
       cells: cellsWithOwners.reduce((acc: any, cell: any) => {
-        acc[cell.id] = cell;
+        acc[cell.id] = {
+          id: cell.id,
+          ownerId: cell.ownerId,
+          ownerNickname: cell.ownerNickname,
+          ownerColor: cell.ownerColor,
+          updatedAt: Number(cell.updatedAt),
+          defense: 1
+        };
         return acc;
       }, {}),
     });
   } catch (err: any) {
     try { await client.query("ROLLBACK"); } catch {}
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: `Erro na sincronização tática: ${err.message}` });
   } finally {
     client.release();
   }
