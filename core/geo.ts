@@ -43,6 +43,9 @@ export const getIntersection = (
   return null;
 };
 
+/**
+ * Versão otimizada de checagem de ponto em polígono.
+ */
 export const isPointInPolygon = (point: {lat: number, lng: number}, polygon: {lat: number, lng: number}[]) => {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -87,12 +90,15 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   }
 };
 
+/**
+ * Função responsável por calcular quais células do grid estão dentro do ciclo.
+ * OTIMIZAÇÃO: Agora limita a área de busca para evitar congelamento.
+ */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
   
-  // Para preenchimento de área, usamos o rastro original sem simplificar muito
-  // Isso garante que o preenchimento acompanhe as curvas reais do usuário
-  const path = rawPath.length > 20 ? simplifyPath(rawPath, RDP_EPSILON * 0.5) : rawPath;
+  // Simplificamos o polígono para reduzir o custo do cálculo isPointInPolygon
+  const path = rawPath.length > 50 ? simplifyPath(rawPath, RDP_EPSILON) : rawPath;
   
   let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
   path.forEach(p => {
@@ -100,17 +106,32 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
     minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
   });
 
-  // Margem de varredura (Sweep)
-  const buffer = GRID_SIZE;
-  const startI = Math.floor((minLat - buffer) / GRID_SIZE);
-  const endI = Math.ceil((maxLat + buffer) / GRID_SIZE);
-  const startJ = Math.floor((minLng - buffer) / GRID_SIZE);
-  const endJ = Math.ceil((maxLng + buffer) / GRID_SIZE);
+  // Proteção contra GPS saltitante ou distâncias absurdas
+  const latDiff = maxLat - minLat;
+  const lngDiff = maxLng - minLng;
+  
+  // Se o polígono for maior que ~2km em qualquer direção, abortamos para não travar o browser
+  if (latDiff > 0.02 || lngDiff > 0.02) {
+    console.warn("[Geo] Polígono muito grande detectado. Operação abortada por segurança.");
+    return [];
+  }
+
+  const startI = Math.floor(minLat / GRID_SIZE);
+  const endI = Math.ceil(maxLat / GRID_SIZE);
+  const startJ = Math.floor(minLng / GRID_SIZE);
+  const endJ = Math.ceil(maxLng / GRID_SIZE);
+
+  // Limite rígido de células processadas por ciclo (máximo 40.000 células)
+  const totalEstimado = (endI - startI + 1) * (endJ - startJ + 1);
+  if (totalEstimado > 40000) {
+     console.warn("[Geo] Grid de captura excede limites de performance. Ignorando preenchimento.");
+     return [];
+  }
 
   const enclosed: string[] = [];
   for (let i = startI; i <= endI; i++) {
+    const cellLat = i * GRID_SIZE;
     for (let j = startJ; j <= endJ; j++) {
-      const cellLat = i * GRID_SIZE;
       const cellLng = j * GRID_SIZE;
       if (isPointInPolygon({ lat: cellLat, lng: cellLng }, path)) {
         enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
