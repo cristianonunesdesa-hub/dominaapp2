@@ -34,7 +34,12 @@ const GameMap: React.FC<GameMapProps> = ({
   const activeTrailLayerRef = useRef<L.Polyline | null>(null);
   const activeAreaLayerRef = useRef<L.Polygon | null>(null);
   const playerMarkerRef = useRef<L.Marker | null>(null);
-  const otherPlayersRef = useRef<Map<string, L.Marker>>(new Map());
+  
+  // Ref para evitar stale closure no evento de clique do Leaflet
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
 
   useEffect(() => {
     if (mapRef.current) return;
@@ -71,12 +76,15 @@ const GameMap: React.FC<GameMapProps> = ({
       renderer: canvasLayerRef.current
     }).addTo(mapRef.current);
 
+    // Evento de clique corrigido
     mapRef.current.on('click', (e: L.LeafletMouseEvent) => {
-      onMapClick?.(e.latlng.lat, e.latlng.lng);
+      if (onMapClickRef.current) {
+        onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+      }
     });
   }, []);
 
-  // Renderização do Território (Blocos Sólidos)
+  // Renderização do Território
   useEffect(() => {
     if (!mapRef.current || !canvasLayerRef.current) return;
 
@@ -124,7 +132,7 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   }, [cells]);
 
-  // Atualização do Rastro e Área Ativa
+  // Atualização do Rastro
   useEffect(() => {
     if (!activeTrailLayerRef.current || !activeAreaLayerRef.current) return;
     
@@ -136,7 +144,7 @@ const GameMap: React.FC<GameMapProps> = ({
     activeAreaLayerRef.current.setStyle({ fillColor: activeUser?.color || '#3B82F6' });
   }, [currentPath, activeUser?.color]);
 
-  // Atualização do Player
+  // Atualização do Player Marker
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
     if (!playerMarkerRef.current) {
@@ -164,7 +172,8 @@ const GameMap: React.FC<GameMapProps> = ({
     <div className="h-full w-full bg-[#0a0a0a]">
       <style>{`
         .map-tiles { filter: brightness(0.4) contrast(1.2) grayscale(0.1); }
-        .player-marker { transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+        .player-marker { transition: all 0.2s linear; }
+        .leaflet-container { background: #000 !important; }
       `}</style>
       <div id="dmn-tactical-map" className="h-full w-full" />
     </div>

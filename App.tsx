@@ -39,24 +39,37 @@ const App: React.FC = () => {
   const [isTestMode, setIsTestMode] = useState(false);
   const [autopilotEnabled, setAutopilotEnabled] = useState(false);
 
-  // Refs para evitar closures obsoletas em timers e listeners
+  // Refs de sincronização rápida
   const userLocationRef = useRef<Point | null>(null);
   const isTestModeRef = useRef(isTestMode);
   const autopilotRef = useRef(autopilotEnabled);
   const testTargetRef = useRef<Point | null>(null);
-  const activityRef = useRef<Activity | null>(null);
 
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
   useEffect(() => { isTestModeRef.current = isTestMode; }, [isTestMode]);
   useEffect(() => { autopilotRef.current = autopilotEnabled; }, [autopilotEnabled]);
-  useEffect(() => { activityRef.current = currentActivity; }, [currentActivity]);
 
   const handleNewLocation = useCallback((pt: Point, force = false) => {
     const processed = processLocation(pt, userLocationRef.current, force || isTestModeRef.current);
-    if (processed) setUserLocation(processed);
+    if (processed) {
+      setUserLocation(processed);
+    }
   }, []);
 
-  // ✅ GPS REAL: Rastreamento contínuo
+  // Handler de clique no mapa (unificado)
+  const onMapClick = useCallback((lat: number, lng: number) => {
+    if (!isTestModeRef.current) return;
+    
+    const clickPoint = { lat, lng, timestamp: Date.now(), accuracy: 5 };
+    
+    if (autopilotRef.current) {
+      testTargetRef.current = clickPoint;
+    } else {
+      handleNewLocation(clickPoint, true);
+    }
+  }, [handleNewLocation]);
+
+  // GPS REAL
   useEffect(() => {
     if (isTestMode || !user || view === AppState.LOGIN) return;
 
@@ -69,30 +82,29 @@ const App: React.FC = () => {
           timestamp: pos.timestamp || Date.now()
         });
       },
-      (err) => console.error("Erro GPS:", err),
+      (err) => console.error("GPS Watch Error:", err),
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
   }, [user, view, isTestMode, handleNewLocation]);
 
-  // ✅ LÓGICA DE PILOTO AUTOMÁTICO (MODO TESTE)
+  // LOOP DO PILOTO AUTOMÁTICO
   useEffect(() => {
-    if (!isTestMode) return;
-
     const timer = setInterval(() => {
+      if (!isTestModeRef.current || !autopilotRef.current || !testTargetRef.current || !userLocationRef.current) return;
+
       const cur = userLocationRef.current;
       const tgt = testTargetRef.current;
-      if (!cur || !tgt || !autopilotRef.current) return;
-
       const dist = calculateDistance(cur, tgt);
-      if (dist < 1) {
+
+      if (dist < 1.5) {
         testTargetRef.current = null;
         return;
       }
 
-      // Caminhada simulada (~12km/h)
-      const stepMeters = 0.8; 
+      // Velocidade de caminhada simulada (aprox 1.2m por tick de 150ms)
+      const stepMeters = 1.2; 
       const metersPerDegLat = 111320;
       const metersPerDegLng = 111320 * Math.cos(cur.lat * Math.PI / 180);
       
@@ -111,7 +123,7 @@ const App: React.FC = () => {
     }, 150);
 
     return () => clearInterval(timer);
-  }, [isTestMode, handleNewLocation]);
+  }, [handleNewLocation]);
 
   // Sincronização Periódica
   useEffect(() => {
@@ -143,7 +155,7 @@ const App: React.FC = () => {
           }, {});
           setUsers(usersMap);
         }
-      } catch (e) { console.error("Erro sync:", e); }
+      } catch (e) { console.error("Sync error:", e); }
     }, 5000);
     return () => clearInterval(interval);
   }, [user?.id]);
@@ -184,7 +196,7 @@ const App: React.FC = () => {
         })
       });
       setUser(newStats);
-    } catch (err) { console.error("Erro capture sync:", err); }
+    } catch (err) { console.error("Capture Sync error:", err); }
 
     setCurrentActivity(prev => {
       if (!prev) return null;
@@ -197,11 +209,14 @@ const App: React.FC = () => {
     });
   }, [user]);
 
+  // Processamento de Ciclo (Território)
   useEffect(() => {
     if (view !== AppState.ACTIVE || !userLocation || !currentActivity || isProcessing) return;
     const path = currentActivity.fullPath;
     const lastPoint = path.length > 0 ? path[path.length - 1] : null;
     const dist = lastPoint ? calculateDistance(lastPoint, userLocation) : Infinity;
+    
+    // Distância mínima menor em modo teste para capturas rápidas
     const triggerDist = isTestMode ? 0.4 : MIN_MOVE_DISTANCE;
 
     if (dist >= triggerDist || path.length === 0) {
@@ -247,15 +262,7 @@ const App: React.FC = () => {
         activeUserId={user?.id || ''}
         activeUser={user}
         currentPath={currentActivity?.fullPath || []}
-        onMapClick={(lat, lng) => {
-           if (isTestMode) {
-             if (autopilotEnabled) {
-               testTargetRef.current = { lat, lng, timestamp: Date.now(), accuracy: 5 };
-             } else {
-               handleNewLocation({ lat, lng, timestamp: Date.now(), accuracy: 5 }, true);
-             }
-           }
-        }}
+        onMapClick={onMapClick}
       />
 
       <TestSimulator 
