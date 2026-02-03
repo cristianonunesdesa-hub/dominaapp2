@@ -13,49 +13,34 @@ export interface LoopResult {
 /**
  * detectClosedLoop
  * Analisa o rastro para detectar se o usuário fechou uma área.
- * ✅ OTIMIZADO: Adicionado Bounding Box check para evitar cálculos pesados em segmentos distantes.
+ * Refeito do zero para máxima precisão.
  */
 export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  if (path.length < 12) return null;
+  // Precisamos de rastro suficiente para um polígono (mínimo ~10-15 metros de rastro)
+  if (path.length < 8) return null;
 
-  const pCurrent = newLocation;
   const pLast = path[path.length - 1];
-  
-  // Bounding box do movimento atual para poda (pruning)
-  const currentMinLat = Math.min(pLast.lat, pCurrent.lat);
-  const currentMaxLat = Math.max(pLast.lat, pCurrent.lat);
-  const currentMinLng = Math.min(pLast.lng, pCurrent.lng);
-  const currentMaxLng = Math.max(pLast.lng, pCurrent.lng);
+  const pCurrent = newLocation;
 
-  const safetyBuffer = 18; 
-  if (path.length <= safetyBuffer) return null;
-  
+  // Evitamos checar os últimos ~6 pontos para não detectar interseção com o rastro imediato
+  const safetyBuffer = 6; 
   const searchablePath = path.slice(0, path.length - safetyBuffer);
 
   /**
-   * MODO 1: CRUZAMENTO DE LINHAS
+   * FASE 1: Interseção Física
+   * Checa se o segmento atual (pLast -> pCurrent) corta o rastro em algum lugar.
    */
-  for (let i = 0; i < searchablePath.length - 1; i++) {
+  for (let i = searchablePath.length - 2; i >= 0; i--) {
     const pA = searchablePath[i];
     const pB = searchablePath[i + 1];
-
-    // ✅ OTIMIZAÇÃO: Checagem rápida de Bounding Box antes do cálculo de interseção
-    const segMinLat = Math.min(pA.lat, pB.lat);
-    const segMaxLat = Math.max(pA.lat, pB.lat);
-    const segMinLng = Math.min(pA.lng, pB.lng);
-    const segMaxLng = Math.max(pA.lng, pB.lng);
-
-    if (currentMaxLat < segMinLat || currentMinLat > segMaxLat || 
-        currentMaxLng < segMinLng || currentMinLng > segMaxLng) {
-      continue; 
-    }
 
     const intersection = getIntersection(pLast, pCurrent, pA, pB);
     
     if (intersection) {
+      // O polígono começa na interseção, segue o rastro até o fim e fecha na interseção
       const polygon = [intersection, ...path.slice(i + 1), intersection];
       const enclosed = getEnclosedCellIds(polygon);
 
@@ -70,19 +55,13 @@ export const detectClosedLoop = (
   }
 
   /**
-   * MODO 2: SNAP POR PROXIMIDADE
+   * FASE 2: Proximidade (Snap)
+   * Se o usuário chegar muito perto de um ponto anterior, fechamos o loop automaticamente.
    */
-  // No Snap, podemos limitar a busca apenas aos pontos que estão dentro da SNAP_TOLERANCE aproximada
-  // para evitar percorrer o path inteiro em atividades gigantescas.
-  const latTolerance = SNAP_TOLERANCE / 111320; // Aproximação grosseira de graus
-
-  for (let i = 0; i < searchablePath.length; i++) {
+  for (let i = searchablePath.length - 1; i >= 0; i--) {
     const pTarget = searchablePath[i];
-    
-    // ✅ OTIMIZAÇÃO: Filtro rápido por latitude antes do cálculo de Haversine
-    if (Math.abs(pCurrent.lat - pTarget.lat) > latTolerance) continue;
-
     const dist = calculateDistance(pCurrent, pTarget);
+    
     if (dist <= SNAP_TOLERANCE) {
       const polygon = [...path.slice(i), pCurrent, pTarget];
       const enclosed = getEnclosedCellIds(polygon);
