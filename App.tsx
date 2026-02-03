@@ -277,29 +277,29 @@ const App: React.FC = () => {
       )}
 
       {view === AppState.HOME && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[1000] flex flex-col items-center gap-4 w-full px-6 max-w-sm">
-          <div className="bg-black/80 backdrop-blur-xl p-5 rounded-[2.5rem] border border-white/10 flex items-center justify-between w-full shadow-2xl">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center font-black italic border border-blue-500/30 text-blue-500 text-xl shadow-inner">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] flex flex-col items-center gap-3 w-full px-6 max-w-sm">
+          <div className="bg-black/90 backdrop-blur-xl p-3.5 rounded-[2rem] border border-white/10 flex items-center justify-between w-full shadow-2xl">
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center font-black italic border border-blue-500/30 text-blue-500 text-lg shadow-inner">
                  {user?.nickname[0]}
                </div>
                <div>
-                 <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest mb-1">Status do Agente</p>
-                 <p className="font-black italic text-sm">{user?.nickname}</p>
-                 <div className="flex gap-4 mt-1 opacity-60 text-[10px] font-bold">
+                 <p className="text-[8px] font-black uppercase text-blue-500 tracking-widest mb-0.5">Agente Ativo</p>
+                 <p className="font-black italic text-xs">{user?.nickname}</p>
+                 <div className="flex gap-3 mt-0.5 opacity-60 text-[9px] font-bold uppercase">
                     <span>LVL {user?.level}</span>
                     <span>{user?.totalAreaM2.toLocaleString()} m²</span>
                  </div>
                </div>
             </div>
-            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-               <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
+            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+               <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
             </div>
           </div>
           
           <button 
             onClick={startMission}
-            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all py-6 rounded-[2.5rem] font-black italic uppercase tracking-tighter text-2xl shadow-[0_20px_50px_rgba(37,99,235,0.4)] border-b-6 border-blue-800 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all py-4.5 rounded-[2rem] font-black italic uppercase tracking-tighter text-xl shadow-[0_15px_40px_rgba(37,99,235,0.4)] border-b-4 border-blue-800 text-white"
           >
             INICIAR DOMÍNIO
           </button>

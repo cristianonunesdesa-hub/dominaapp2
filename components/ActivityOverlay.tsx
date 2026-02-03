@@ -14,44 +14,44 @@ const ActivityOverlay: React.FC<ActivityOverlayProps> = ({ activity, onStop, use
 
   return (
     <div className="absolute inset-0 p-4 flex flex-col pointer-events-none z-[1500] font-sans">
-      {/* HUD Central: Área Capturada - Agora mais compacta e alta */}
-      <div className="mt-12 text-center animate-in fade-in slide-in-from-top-4 duration-700">
+      {/* HUD Central: Área Capturada - Reduzido */}
+      <div className="mt-8 text-center animate-in fade-in slide-in-from-top-4 duration-700">
         <div 
-          className="text-[64px] font-[900] tracking-tighter leading-none italic flex items-baseline justify-center"
+          className="text-[42px] font-[900] tracking-tighter leading-none italic flex items-baseline justify-center"
           style={{ 
             color: userColor,
-            textShadow: `0 0 30px ${userColor}44` 
+            textShadow: `0 0 20px ${userColor}44` 
           }}
         >
-          {area.toLocaleString('pt-BR')}<span className="text-xl ml-1 not-italic opacity-80 font-black">m²</span>
+          {area.toLocaleString('pt-BR')}<span className="text-sm ml-1 not-italic opacity-80 font-black">m²</span>
         </div>
-        <div className="text-[8px] font-black uppercase tracking-[0.4em] text-white/30 mt-2">
+        <div className="text-[7px] font-black uppercase tracking-[0.4em] text-white/30 mt-1">
           Sincronização Ativa
         </div>
       </div>
 
-      {/* HUD Inferior: Stats e Ação - Mais compactos */}
-      <div className="mt-auto flex flex-col gap-3 pointer-events-auto pb-6 max-w-md mx-auto w-full">
-        <div className="grid grid-cols-2 gap-3">
+      {/* HUD Inferior: Stats e Ação - Compactado */}
+      <div className="mt-auto flex flex-col gap-2 pointer-events-auto pb-4 max-w-sm mx-auto w-full">
+        <div className="grid grid-cols-2 gap-2">
           {/* Card Distância */}
-          <div className="bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/5 p-4 rounded-3xl text-center shadow-2xl">
-            <div className="text-[9px] font-black text-white/20 uppercase mb-0.5 tracking-widest">Distância</div>
-            <div className="text-xl font-[900] italic text-white leading-none">
-              {(activity.distanceMeters/1000).toFixed(2)}<span className="text-xs ml-0.5 opacity-40">km</span>
+          <div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/5 p-2.5 rounded-2xl text-center shadow-2xl">
+            <div className="text-[8px] font-black text-white/20 uppercase mb-0.5 tracking-widest">Distância</div>
+            <div className="text-base font-[900] italic text-white leading-none">
+              {(activity.distanceMeters/1000).toFixed(2)}<span className="text-[10px] ml-0.5 opacity-40">km</span>
             </div>
           </div>
           
           {/* Card Sinal */}
-          <div className="bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/5 p-4 rounded-3xl text-center shadow-2xl">
-            <div className="text-[9px] font-black text-white/20 uppercase mb-0.5 tracking-widest">Sinal</div>
-            <div className="text-xl font-[900] italic text-[#10B981] animate-pulse leading-none uppercase">Conectado</div>
+          <div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/5 p-2.5 rounded-2xl text-center shadow-2xl">
+            <div className="text-[8px] font-black text-white/20 uppercase mb-0.5 tracking-widest">Sinal</div>
+            <div className="text-base font-[900] italic text-[#10B981] animate-pulse leading-none uppercase">Conectado</div>
           </div>
         </div>
         
-        {/* Botão Encerrar - Altura reduzida para melhor ergonomia */}
+        {/* Botão Encerrar - Reduzido */}
         <button 
           onClick={onStop}
-          className="w-full bg-[#b91c1c] hover:bg-red-700 py-5 rounded-3xl font-[900] text-lg uppercase italic shadow-[0_10px_25px_rgba(185,28,28,0.3)] active:scale-[0.97] transition-all border-b-[4px] border-red-900 text-white"
+          className="w-full bg-[#b91c1c] hover:bg-red-700 py-3.5 rounded-2xl font-[900] text-base uppercase italic shadow-[0_8px_20px_rgba(185,28,28,0.3)] active:scale-[0.97] transition-all border-b-[3px] border-red-900 text-white"
         >
           ENCERRAR MISSÃO
         </button>
