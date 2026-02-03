@@ -4,8 +4,8 @@ import { GRID_SIZE, RDP_EPSILON } from '../constants';
 import { Point } from '../types';
 
 /**
- * ✅ CORREÇÃO: getCellId alinhado ao centro do grid e com precisão consistente.
- * Usamos Math.floor para garantir que um ponto pertença a exatamente uma "caixa" do grid.
+ * Retorna o ID da célula baseado nas coordenadas.
+ * O ID representa o canto inferior esquerdo (SW) da célula no grid.
  */
 export const getCellId = (lat: number, lng: number): string => {
   const iLat = Math.floor(lat / GRID_SIZE);
@@ -13,6 +13,9 @@ export const getCellId = (lat: number, lng: number): string => {
   return `${(iLat * GRID_SIZE).toFixed(8)}_${(iLng * GRID_SIZE).toFixed(8)}`;
 };
 
+/**
+ * Calcula distância entre dois pontos usando Haversine.
+ */
 export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: number, lng: number }): number => {
   const R = 6371e3;
   const dLat = (p2.lat - p1.lat) * Math.PI / 180;
@@ -23,6 +26,9 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+/**
+ * Detecta interseção entre dois segmentos de reta.
+ */
 export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
   const x1 = p1.lng, y1 = p1.lat;
   const x2 = p2.lng, y2 = p2.lat;
@@ -46,6 +52,9 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
   return null;
 };
 
+/**
+ * Algoritmo Douglas-Peucker para simplificar caminhos.
+ */
 export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   if (points.length <= 2) return points;
   
@@ -79,14 +88,27 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
 };
 
 /**
- * ✅ OTIMIZADO E CORRIGIDO: 
- * 1. Limite aumentado para 10.000 unidades (~22km)
- * 2. Lógica de scanline consistente com getCellId
+ * Verifica se um ponto está dentro de um polígono (Ray Casting).
+ */
+export const isPointInPolygon = (point: { lat: number, lng: number }, polygon: Point[]): boolean => {
+  let isInside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng, yi = polygon[i].lat;
+    const xj = polygon[j].lng, yj = polygon[j].lat;
+    const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+        (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+    if (intersect) isInside = !isInside;
+  }
+  return isInside;
+};
+
+/**
+ * Retorna todos os IDs de células dentro de um polígono fechado.
+ * ✅ OTIMIZADO: Uso de Point-in-Polygon (PIP) no centro de cada célula.
  */
 export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
   if (rawPath.length < 3) return [];
 
-  // Simplificação agressiva para o cálculo de área (performance)
   const polygon = simplifyPath(rawPath, RDP_EPSILON * 0.5);
   
   let minLat = Infinity, maxLat = -Infinity;
@@ -101,40 +123,27 @@ export const getEnclosedCellIds = (rawPath: Point[]): string[] => {
 
   const startILat = Math.floor(minLat / GRID_SIZE);
   const endILat = Math.ceil(maxLat / GRID_SIZE);
-  
-  // Limite aumentado para 10000 (~22km) para suportar maratonas
-  if (endILat - startILat > 10000) return []; 
+  const startILng = Math.floor(minLng / GRID_SIZE);
+  const endILng = Math.ceil(maxLng / GRID_SIZE);
+
+  // Limite de segurança para evitar loops infinitos em polígonos inválidos
+  if ((endILat - startILat) * (endILng - startILng) > 25000) return []; 
 
   const enclosed: string[] = [];
 
   for (let i = startILat; i <= endILat; i++) {
-    const scanLat = i * GRID_SIZE; 
-    const intersections: number[] = [];
-
-    for (let j = 0; j < polygon.length; j++) {
-      const p1 = polygon[j];
-      const p2 = polygon[(j + 1) % polygon.length];
-
-      if ((p1.lat <= scanLat && p2.lat > scanLat) || (p2.lat <= scanLat && p1.lat > scanLat)) {
-        const intersectLng = p1.lng + (scanLat - p1.lat) * (p2.lng - p1.lng) / (p2.lat - p1.lat);
-        intersections.push(intersectLng);
-      }
-    }
-
-    intersections.sort((a, b) => a - b);
-
-    for (let k = 0; k < intersections.length; k += 2) {
-      if (k + 1 >= intersections.length) break;
+    const cellLat = i * GRID_SIZE;
+    for (let j = startILng; j <= endILng; j++) {
+      const cellLng = j * GRID_SIZE;
       
-      const startLng = intersections[k];
-      const endLng = intersections[k+1];
-      
-      const jStart = Math.ceil(startLng / GRID_SIZE);
-      const jEnd = Math.floor(endLng / GRID_SIZE);
+      // Testamos o CENTRO da célula para maior precisão
+      const center = { 
+        lat: cellLat + (GRID_SIZE / 2), 
+        lng: cellLng + (GRID_SIZE / 2) 
+      };
 
-      for (let j = jStart; j <= jEnd; j++) {
-        // IDs gerados aqui agora são garantidamente iguais aos do getCellId
-        enclosed.push(`${scanLat.toFixed(8)}_${(j * GRID_SIZE).toFixed(8)}`);
+      if (isPointInPolygon(center, polygon)) {
+        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
       }
     }
   }

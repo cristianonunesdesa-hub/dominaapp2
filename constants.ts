@@ -1,18 +1,18 @@
 
-export const GRID_SIZE = 0.00002; 
-export const CELL_AREA_M2 = 5; 
-export const ANTI_CHEAT_SPEED_LIMIT_KMH = 35; // Aumentado para corredores rápidos
+export const GRID_SIZE = 0.00004; 
+export const CELL_AREA_M2 = 20; 
+export const ANTI_CHEAT_SPEED_LIMIT_KMH = 35;
 export const XP_PER_KM = 100;
-export const XP_PER_SECTOR = 0.5; 
-export const XP_PER_SABOTAGE = 2;
+export const XP_PER_SECTOR = 5; 
+export const XP_PER_SABOTAGE = 10;
 export const XP_PER_CITADEL = 50;
 export const LEVEL_XP_BASE = 1000;
 
 // Configurações do Pipeline Geoflow™
-export const MIN_MOVE_DISTANCE = 5;    // Reduzido para 5m para maior precisão em curvas
-export const MAX_IDLE_TIME = 4000;     // 4s sem movimento força atualização
-export const RDP_EPSILON = 0.000015;   // Tolerância de simplificação (~1.5m)
-export const SNAP_TOLERANCE = 20;      // Proximidade para snap automático em metros (Solicitado: 20m)
+export const MIN_MOVE_DISTANCE = 3;    
+export const MAX_IDLE_TIME = 4000;     
+export const RDP_EPSILON = 0.00001;   
+export const SNAP_TOLERANCE = 15;      
 
 export const COLORS = {
   PRIMARY: '#3B82F6', 

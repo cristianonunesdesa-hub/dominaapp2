@@ -1,3 +1,4 @@
+
 // Arquivo: App.tsx
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -363,7 +364,8 @@ const App: React.FC = () => {
       )}
       {view === AppState.ACTIVE && currentActivity && <ActivityOverlay activity={currentActivity} user={user} onStop={stopActivity} />}
       {view === AppState.SUMMARY && currentActivity && user && <MissionSummary activity={currentActivity} user={user} onFinish={finishMission} />}
-      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers).map((u) => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2, level: u.level, color: u.color, avatarUrl: u.avatarUrl }))} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
+      {/* Explicitly cast each user to PublicUser to resolve 'unknown' type inference in the map callback */}
+      {view === AppState.LEADERBOARD && <Leaderboard entries={Object.values(globalUsers).map((u: PublicUser) => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2, level: u.level, color: u.color, avatarUrl: u.avatarUrl }))} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
       <TestSimulator isEnabled={isTestMode} onToggle={setIsTestMode} onLocationUpdate={handleNewLocation} userLocation={userLocation} showOverlay={view !== AppState.LOGIN} autopilotEnabled={testAutopilot} onAutopilotToggle={(active) => active ? startTestAutopilot() : stopTestAutopilot()} />
     </div>
   );
