@@ -1,4 +1,3 @@
-
 /**
  * types.ts - Central de Definições de Tipos "Domina"
  */
@@ -8,6 +7,13 @@ export interface Point {
   lng: number;
   accuracy?: number;
   timestamp: number;
+}
+
+export interface TerritoryShape {
+  id: string;
+  ownerId: string;
+  ownerColor: string;
+  polygon: Point[];
 }
 
 export interface User {

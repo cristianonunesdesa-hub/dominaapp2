@@ -1,4 +1,3 @@
-
 // Arquivo: core/geo.ts
 
 import { GRID_SIZE } from '../constants';
@@ -36,12 +35,11 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
   const x4 = p4.lng, y4 = p4.lat;
 
   const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (Math.abs(denom) < 1e-14) return null; // Tolerância ultra-fina
+  if (Math.abs(denom) < 1e-14) return null; 
 
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-  // Ub deve ser menor que 0.99 para evitar snap no próprio ponto anterior (p2)
   if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 0.999) {
     return {
       lat: y1 + ua * (y2 - y1),
@@ -83,7 +81,6 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
     if (p.lng > maxLng) maxLng = p.lng;
   }
 
-  // Margem de segurança para garantir que células cortadas pela borda sejam testadas
   const iMinLat = Math.floor((minLat - GRID_SIZE) / GRID_SIZE);
   const iMaxLat = Math.ceil((maxLat + GRID_SIZE) / GRID_SIZE);
   const iMinLng = Math.floor((minLng - GRID_SIZE) / GRID_SIZE);
@@ -96,7 +93,6 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
       const cellLat = ilat * GRID_SIZE;
       const cellLng = ilng * GRID_SIZE;
       
-      // Amostragem em 5 pontos (centro + 4 cantos internos) para preenchimento robusto
       const testPoints = [
         { lat: cellLat + GRID_SIZE * 0.5, lng: cellLng + GRID_SIZE * 0.5 },
         { lat: cellLat + GRID_SIZE * 0.2, lng: cellLng + GRID_SIZE * 0.2 },
@@ -115,7 +111,7 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
 };
 
 /**
- * Simplifica o caminho preservando a fidelidade para preenchimento de área.
+ * Simplifica o caminho preservando a fidelidade.
  */
 export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   if (points.length <= 2) return points;
@@ -153,4 +149,37 @@ export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   };
 
   return simplify(points);
+};
+
+/**
+ * Suavização Chaikin para polígonos contínuos e fluidos.
+ */
+export const chaikinSmooth = (points: Point[], iterations: number = 2): Point[] => {
+  if (points.length < 3) return points;
+  let smoothed = [...points];
+
+  for (let i = 0; i < iterations; i++) {
+    const next: Point[] = [];
+    for (let j = 0; j < smoothed.length - 1; j++) {
+      const p0 = smoothed[j];
+      const p1 = smoothed[j + 1];
+      
+      next.push({
+        lat: p0.lat * 0.75 + p1.lat * 0.25,
+        lng: p0.lng * 0.75 + p1.lng * 0.25,
+        timestamp: p0.timestamp
+      });
+      next.push({
+        lat: p0.lat * 0.25 + p1.lat * 0.75,
+        lng: p0.lng * 0.25 + p1.lng * 0.75,
+        timestamp: p1.timestamp
+      });
+    }
+    // Fecha o loop se o original fosse fechado
+    if (points[0].lat === points[points.length-1].lat && points[0].lng === points[points.length-1].lng) {
+        next.push(next[0]);
+    }
+    smoothed = next;
+  }
+  return smoothed;
 };
