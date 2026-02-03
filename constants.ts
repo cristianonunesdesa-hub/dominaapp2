@@ -8,11 +8,16 @@ export const XP_PER_SABOTAGE = 10;
 export const XP_PER_CITADEL = 50;
 export const LEVEL_XP_BASE = 1000;
 
-// Configurações do Pipeline Geoflow™
-export const MIN_MOVE_DISTANCE = 3;    
+// Configurações Estáveis do Pipeline Geoflow™
+export const MIN_MOVE_DISTANCE = 5.0; 
 export const MAX_IDLE_TIME = 4000;     
-export const RDP_EPSILON = 0.00001;   
-export const SNAP_TOLERANCE = 15;      
+export const RDP_EPSILON = 0.000015;  
+export const SNAP_TOLERANCE = 25;      
+
+// Thresholds Anti-Falso Positivo
+export const MIN_ENCLOSED_CELLS = 30;       // ~600m2 (30 * 20m2)
+export const MIN_LOOP_PERIMETER_M = 60;     // Mínimo de 60m percorridos para um loop válido
+export const LOOP_SAFETY_BUFFER_PTS = 25;   // Ignora os últimos 25 pontos do rastro para evitar trigger em curvas
 
 export const COLORS = {
   PRIMARY: '#3B82F6', 

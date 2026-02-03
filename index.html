@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,7 +30,7 @@
             font-family: 'Inter', sans-serif;
         }
         .leaflet-container {
-            background-color: #111111 !important;
+            background-color: #0a0a0a !important;
         }
         .safe-area-top {
             padding-top: env(safe-area-inset-top);
@@ -37,6 +38,24 @@
         .safe-area-bottom {
             padding-bottom: env(safe-area-inset-bottom);
         }
+        
+        /* Smooth Player Marker Animation */
+        .player-marker {
+            transition: transform 0.8s cubic-bezier(0.2, 0, 0.1, 1);
+            z-index: 1000 !important;
+            will-change: transform;
+        }
+
+        .player-pulse {
+            animation: pulse-liquid 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-liquid {
+            0% { transform: scale(0.7); opacity: 0.3; filter: blur(10px); }
+            50% { transform: scale(1.4); opacity: 0.15; filter: blur(20px); }
+            100% { transform: scale(0.7); opacity: 0.3; filter: blur(10px); }
+        }
+
         ::-webkit-scrollbar {
             width: 4px;
         }

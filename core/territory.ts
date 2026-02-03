@@ -1,7 +1,8 @@
+
 // Arquivo: core/territory.ts
 
 import { Point } from '../types';
-import { SNAP_TOLERANCE } from '../constants';
+import { SNAP_TOLERANCE, MIN_ENCLOSED_CELLS, MIN_LOOP_PERIMETER_M, LOOP_SAFETY_BUFFER_PTS } from '../constants';
 import { calculateDistance, getIntersection, getEnclosedCellIds } from './geo';
 
 export interface LoopResult {
@@ -11,67 +12,106 @@ export interface LoopResult {
 }
 
 /**
- * detectClosedLoop
- * Analisa o rastro para detectar se o usuário fechou uma área.
- * Refeito do zero para máxima precisão.
+ * Remove pontos duplicados consecutivos e garante que o polígono seja fechado.
  */
+const cleanPolygon = (poly: Point[]): Point[] => {
+  if (poly.length < 3) return [];
+  const result: Point[] = [poly[0]];
+  
+  for (let i = 1; i < poly.length; i++) {
+    const p1 = poly[i - 1];
+    const p2 = poly[i];
+    if (p1.lat !== p2.lat || p1.lng !== p2.lng) {
+      result.push(p2);
+    }
+  }
+
+  const first = result[0];
+  const last = result[result.length - 1];
+  if (first.lat !== last.lat || first.lng !== last.lng) {
+    result.push({ ...first, timestamp: Date.now() });
+  }
+
+  return result;
+};
+
+const isValidBoundingBox = (polygon: Point[]): boolean => {
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const p of polygon) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  const width = calculateDistance({ lat: minLat, lng: minLng }, { lat: minLat, lng: maxLng });
+  const height = calculateDistance({ lat: minLat, lng: minLng }, { lat: maxLat, lng: minLng });
+  return width >= 15 && height >= 15;
+};
+
+const calculatePathPerimeter = (pts: Point[]): number => {
+  let dist = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    dist += calculateDistance(pts[i], pts[i+1]);
+  }
+  return dist;
+};
+
 export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  // Precisamos de rastro suficiente para um polígono (mínimo ~10-15 metros de rastro)
-  if (path.length < 8) return null;
+  if (path.length < LOOP_SAFETY_BUFFER_PTS + 5) return null;
 
   const pLast = path[path.length - 1];
   const pCurrent = newLocation;
+  const searchablePath = path.slice(0, path.length - LOOP_SAFETY_BUFFER_PTS);
 
-  // Evitamos checar os últimos ~6 pontos para não detectar interseção com o rastro imediato
-  const safetyBuffer = 6; 
-  const searchablePath = path.slice(0, path.length - safetyBuffer);
-
-  /**
-   * FASE 1: Interseção Física
-   * Checa se o segmento atual (pLast -> pCurrent) corta o rastro em algum lugar.
-   */
+  // 1. Interseção
   for (let i = searchablePath.length - 2; i >= 0; i--) {
     const pA = searchablePath[i];
     const pB = searchablePath[i + 1];
-
     const intersection = getIntersection(pLast, pCurrent, pA, pB);
     
     if (intersection) {
-      // O polígono começa na interseção, segue o rastro até o fim e fecha na interseção
-      const polygon = [intersection, ...path.slice(i + 1), intersection];
-      const enclosed = getEnclosedCellIds(polygon);
+      const rawLoop = [intersection, ...path.slice(i + 1), pCurrent, intersection];
+      const loopPath = cleanPolygon(rawLoop);
+      const perimeter = calculatePathPerimeter(loopPath);
 
-      if (enclosed.length > 0) {
-        return {
-          polygon,
-          enclosedCellIds: enclosed,
-          closurePoint: intersection
-        };
+      if (perimeter < MIN_LOOP_PERIMETER_M) continue;
+
+      const enclosed = getEnclosedCellIds(loopPath);
+      if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+        console.log("[LOOP OK]", { reason: "INTERSECTION", polygonLen: loopPath.length, enclosedLen: enclosed.length });
+        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
       }
     }
   }
 
-  /**
-   * FASE 2: Proximidade (Snap)
-   * Se o usuário chegar muito perto de um ponto anterior, fechamos o loop automaticamente.
-   */
-  for (let i = searchablePath.length - 1; i >= 0; i--) {
+  // 2. Snap
+  let bestSnapPoint: Point | null = null;
+  let minSnapDist = Infinity;
+  let bestSnapIndex = -1;
+
+  for (let i = 0; i < searchablePath.length; i++) {
     const pTarget = searchablePath[i];
     const dist = calculateDistance(pCurrent, pTarget);
-    
-    if (dist <= SNAP_TOLERANCE) {
-      const polygon = [...path.slice(i), pCurrent, pTarget];
-      const enclosed = getEnclosedCellIds(polygon);
+    if (dist <= SNAP_TOLERANCE && dist < minSnapDist) {
+      minSnapDist = dist;
+      bestSnapPoint = pTarget;
+      bestSnapIndex = i;
+    }
+  }
 
-      if (enclosed.length > 0) {
-        return {
-          polygon,
-          enclosedCellIds: enclosed,
-          closurePoint: pTarget
-        };
+  if (bestSnapPoint && bestSnapIndex !== -1) {
+    const rawLoop = [...path.slice(bestSnapIndex), pCurrent, bestSnapPoint];
+    const loopPath = cleanPolygon(rawLoop);
+    const perimeter = calculatePathPerimeter(loopPath);
+
+    if (perimeter >= MIN_LOOP_PERIMETER_M) {
+      const enclosed = getEnclosedCellIds(loopPath);
+      if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+        console.log("[LOOP OK]", { reason: "SNAP", polygonLen: loopPath.length, enclosedLen: enclosed.length });
+        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: bestSnapPoint };
       }
     }
   }

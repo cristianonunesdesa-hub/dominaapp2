@@ -1,10 +1,11 @@
+
 // Arquivo: core/geo.ts
 
 import { GRID_SIZE } from '../constants';
 import { Point } from '../types';
 
 /**
- * Calcula o ID único da célula.
+ * Calcula o ID único da célula baseado no grid fixo.
  */
 export const getCellId = (lat: number, lng: number): string => {
   const iLat = Math.floor(lat / GRID_SIZE);
@@ -27,7 +28,6 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
 
 /**
  * Verifica se dois segmentos (P1-P2 e P3-P4) se interceptam.
- * Retorna o ponto de interseção ou null.
  */
 export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
   const x1 = p1.lng, y1 = p1.lat;
@@ -36,14 +36,13 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
   const x4 = p4.lng, y4 = p4.lat;
 
   const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (denom === 0) return null;
+  if (Math.abs(denom) < 1e-14) return null; // Tolerância ultra-fina
 
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-  // Precisão flutuante para evitar erros de borda
-  const eps = 0.0000001;
-  if (ua >= 0 && ua <= 1 && ub >= eps && ub <= 1 - eps) {
+  // Ub deve ser menor que 0.99 para evitar snap no próprio ponto anterior (p2)
+  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 0.999) {
     return {
       lat: y1 + ua * (y2 - y1),
       lng: x1 + ua * (x2 - x1),
@@ -54,7 +53,7 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
 };
 
 /**
- * Algoritmo Point-in-Polygon (Ray Casting) para determinar se uma célula está dentro do circuito.
+ * Algoritmo Point-in-Polygon (Ray Casting).
  */
 export const isPointInPolygon = (point: { lat: number, lng: number }, polygon: Point[]): boolean => {
   let inside = false;
@@ -70,7 +69,6 @@ export const isPointInPolygon = (point: { lat: number, lng: number }, polygon: P
 
 /**
  * Retorna as células contidas dentro de um polígono fechado.
- * Varre o bounding box do polígono testando o centro de cada célula do grid.
  */
 export const getEnclosedCellIds = (polygon: Point[]): string[] => {
   if (polygon.length < 3) return [];
@@ -85,20 +83,30 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
     if (p.lng > maxLng) maxLng = p.lng;
   }
 
-  const startLat = Math.floor(minLat / GRID_SIZE) * GRID_SIZE;
-  const endLat = Math.ceil(maxLat / GRID_SIZE) * GRID_SIZE;
-  const startLng = Math.floor(minLng / GRID_SIZE) * GRID_SIZE;
-  const endLng = Math.ceil(maxLng / GRID_SIZE) * GRID_SIZE;
+  // Margem de segurança para garantir que células cortadas pela borda sejam testadas
+  const iMinLat = Math.floor((minLat - GRID_SIZE) / GRID_SIZE);
+  const iMaxLat = Math.ceil((maxLat + GRID_SIZE) / GRID_SIZE);
+  const iMinLng = Math.floor((minLng - GRID_SIZE) / GRID_SIZE);
+  const iMaxLng = Math.ceil((maxLng + GRID_SIZE) / GRID_SIZE);
 
   const enclosed: string[] = [];
   
-  // Amostragem do Grid
-  for (let lat = startLat; lat <= endLat; lat += GRID_SIZE) {
-    for (let lng = startLng; lng <= endLng; lng += GRID_SIZE) {
-      // Testamos o centro da célula
-      const testPoint = { lat: lat + GRID_SIZE / 2, lng: lng + GRID_SIZE / 2 };
-      if (isPointInPolygon(testPoint, polygon)) {
-        enclosed.push(`${lat.toFixed(8)}_${lng.toFixed(8)}`);
+  for (let ilat = iMinLat; ilat <= iMaxLat; ilat++) {
+    for (let ilng = iMinLng; ilng <= iMaxLng; ilng++) {
+      const cellLat = ilat * GRID_SIZE;
+      const cellLng = ilng * GRID_SIZE;
+      
+      // Amostragem em 5 pontos (centro + 4 cantos internos) para preenchimento robusto
+      const testPoints = [
+        { lat: cellLat + GRID_SIZE * 0.5, lng: cellLng + GRID_SIZE * 0.5 },
+        { lat: cellLat + GRID_SIZE * 0.2, lng: cellLng + GRID_SIZE * 0.2 },
+        { lat: cellLat + GRID_SIZE * 0.8, lng: cellLng + GRID_SIZE * 0.8 },
+        { lat: cellLat + GRID_SIZE * 0.2, lng: cellLng + GRID_SIZE * 0.8 },
+        { lat: cellLat + GRID_SIZE * 0.8, lng: cellLng + GRID_SIZE * 0.2 }
+      ];
+
+      if (testPoints.some(tp => isPointInPolygon(tp, polygon))) {
+        enclosed.push(`${cellLat.toFixed(8)}_${cellLng.toFixed(8)}`);
       }
     }
   }
@@ -107,7 +115,7 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
 };
 
 /**
- * Simplifica o caminho para renderização e cálculos sem perder a forma básica.
+ * Simplifica o caminho preservando a fidelidade para preenchimento de área.
  */
 export const simplifyPath = (points: Point[], epsilon: number): Point[] => {
   if (points.length <= 2) return points;

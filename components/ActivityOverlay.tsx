@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Activity, User } from '../types';
 import { CELL_AREA_M2 } from '../constants';
@@ -13,8 +14,8 @@ const ActivityOverlay: React.FC<ActivityOverlayProps> = ({ activity, onStop, use
   const userColor = user?.color || '#3B82F6';
 
   return (
-    <div className="absolute inset-0 p-4 flex flex-col pointer-events-none z-[1500] font-sans">
-      {/* HUD Central: Área Capturada - Reduzido */}
+    <div className="absolute inset-0 p-4 flex flex-col pointer-events-none z-[2000] font-sans safe-area-top safe-area-bottom">
+      {/* HUD Central: Área Capturada */}
       <div className="mt-8 text-center animate-in fade-in slide-in-from-top-4 duration-700">
         <div 
           className="text-[42px] font-[900] tracking-tighter leading-none italic flex items-baseline justify-center"
@@ -30,8 +31,8 @@ const ActivityOverlay: React.FC<ActivityOverlayProps> = ({ activity, onStop, use
         </div>
       </div>
 
-      {/* HUD Inferior: Stats e Ação - Compactado */}
-      <div className="mt-auto flex flex-col gap-2 pointer-events-auto pb-4 max-w-sm mx-auto w-full">
+      {/* HUD Inferior: Stats e Ação - Ajustado para Safe Area */}
+      <div className="mt-auto flex flex-col gap-2 pointer-events-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))] max-w-sm mx-auto w-full">
         <div className="grid grid-cols-2 gap-2">
           {/* Card Distância */}
           <div className="bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/5 p-2.5 rounded-2xl text-center shadow-2xl">
@@ -48,10 +49,10 @@ const ActivityOverlay: React.FC<ActivityOverlayProps> = ({ activity, onStop, use
           </div>
         </div>
         
-        {/* Botão Encerrar - Reduzido */}
+        {/* Botão Encerrar */}
         <button 
           onClick={onStop}
-          className="w-full bg-[#b91c1c] hover:bg-red-700 py-3.5 rounded-2xl font-[900] text-base uppercase italic shadow-[0_8px_20px_rgba(185,28,28,0.3)] active:scale-[0.97] transition-all border-b-[3px] border-red-900 text-white"
+          className="w-full bg-[#b91c1c] hover:bg-red-700 py-4 rounded-2xl font-[900] text-base uppercase italic shadow-[0_8px_20px_rgba(185,28,28,0.3)] active:scale-[0.97] transition-all border-b-[3px] border-red-900 text-white"
         >
           ENCERRAR MISSÃO
         </button>
