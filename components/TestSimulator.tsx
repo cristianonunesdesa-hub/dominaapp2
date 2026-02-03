@@ -27,19 +27,6 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
 
   if (!showOverlay) return null;
 
-  const handleStartSim = () => {
-    onToggle(true);
-    // Teletransporte padrão para teste (Praça da Sé, SP) se não houver local
-    if (!userLocation) {
-      onLocationUpdate({
-        lat: -23.5505,
-        lng: -46.6333,
-        timestamp: Date.now(),
-        accuracy: 5
-      }, true);
-    }
-  };
-
   const handleWipeDatabase = async () => {
     if (!confirm("⚠️ ALERTA: Deseja zerar TODAS as capturas e usuários do servidor agora?")) return;
     setIsWiping(true);
@@ -66,60 +53,53 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
       {/* Botão Flutuante de Toggle */}
       <button
         onClick={() => onToggle(!isEnabled)}
-        className={`pointer-events-auto p-4 rounded-3xl border-2 flex items-center gap-3 transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)] active:scale-90 ${
+        className={`pointer-events-auto px-6 py-4 rounded-[1.8rem] border-2 flex items-center gap-3 transition-all shadow-[0_10px_40px_rgba(0,0,0,0.5)] active:scale-90 ${
           isEnabled
-            ? 'bg-orange-600 border-white text-white scale-105 shadow-[0_0_25px_rgba(234,88,12,0.6)]'
+            ? 'bg-[#f15a24] border-white text-white scale-105 shadow-[0_0_25px_rgba(241,90,36,0.6)]'
             : 'bg-black/90 border-white/20 text-white/50'
         }`}
       >
         <Zap size={18} className={isEnabled ? 'fill-white animate-pulse' : ''} />
-        <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+        <span className="text-[12px] font-black uppercase tracking-[0.2em]">
           {isEnabled ? 'DEBUG ATIVO' : 'MODO TESTE'}
         </span>
       </button>
 
-      {/* Painel de Ferramentas */}
+      {/* Painel de Ferramentas - Reformulado conforme o Print */}
       {isEnabled && (
-        <div className="pointer-events-auto bg-black/95 backdrop-blur-2xl border border-orange-500/40 p-5 rounded-[2rem] w-56 shadow-2xl animate-in slide-in-from-left-4 duration-300">
-          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/10">
-            <Navigation2 size={14} className="text-orange-500" />
-            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Controle de Campo</span>
+        <div className="pointer-events-auto bg-[#0a0a0a] backdrop-blur-3xl border-2 border-orange-500/40 p-6 rounded-[2.5rem] w-[240px] shadow-2xl animate-in slide-in-from-left-4 duration-300">
+          <div className="flex items-center gap-3 mb-6 pb-2 border-b border-white/5">
+            <Navigation2 size={16} className="text-[#f15a24] fill-[#f15a24]/20" />
+            <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Controle de Campo</span>
           </div>
 
-          <div className="space-y-3">
-            {!userLocation && (
-              <button
-                onClick={handleStartSim}
-                className="w-full py-3 bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 transition-colors"
-              >
-                SPAWN EM SP (SÉ)
-              </button>
-            )}
-
-            {/* AUTO WALK */}
+          <div className="space-y-4">
+            {/* Botão Piloto Auto - VERDE quando ON */}
             <button
               onClick={() => onAutopilotToggle(!autopilotEnabled)}
-              className={`w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+              className={`w-full py-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${
                 autopilotEnabled
-                  ? 'bg-emerald-600 text-white border-white/20 shadow-[0_0_15px_rgba(16,185,129,0.4)]'
-                  : 'bg-white/5 text-white/40 border-white/10'
+                  ? 'bg-[#10b981] text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                  : 'bg-white/5 text-white/30 border border-white/10'
               }`}
             >
               {autopilotEnabled ? 'PILOTO AUTO: ON' : 'PILOTO AUTO: OFF'}
             </button>
 
+            {/* Botão Wipe - Vermelho Escuro */}
             <button
               onClick={handleWipeDatabase}
               disabled={isWiping}
-              className="w-full py-3 bg-red-600/10 border border-red-500/20 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-red-600/20 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-5 bg-[#7f1d1d]/30 border border-red-500/20 text-red-500 rounded-2xl text-[11px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-red-900/40 transition-colors flex items-center justify-center gap-2"
             >
-              <RefreshCcw size={12} className={isWiping ? 'animate-spin' : ''} />
+              <RefreshCcw size={14} className={isWiping ? 'animate-spin' : ''} />
               {isWiping ? 'LIMPANDO...' : 'WIPE SERVER DATA'}
             </button>
 
-            <div className="p-3 bg-white/[0.03] rounded-2xl border border-white/5">
-              <p className="text-[9px] leading-relaxed text-orange-400/80 font-bold uppercase italic text-center">
-                Clique no mapa para definir o destino e caminhar automaticamente.
+            {/* Texto Descritivo igual ao Print */}
+            <div className="p-4 bg-white/[0.02] rounded-3xl border border-white/5 mt-2">
+              <p className="text-[10px] leading-relaxed text-[#f15a24]/80 font-black uppercase italic text-center tracking-tight">
+                CLIQUE NO MAPA PARA DEFINIR O DESTINO E CAMINHAR AUTOMATICAMENTE.
               </p>
             </div>
           </div>
