@@ -59,6 +59,7 @@ export interface Activity {
   endTime?: number;
   points: Point[];
   fullPath: Point[];
+  segmentStartIndex: number; // Índice no fullPath onde inicia o segmento atual para detecção de loop
   capturedCellIds: Set<string>;
   stolenCellIds: Set<string>;
   distanceMeters: number;

@@ -1,9 +1,8 @@
-
 // Arquivo: core/territory.ts
 
 import { Point } from '../types';
-import { SNAP_TOLERANCE, MIN_ENCLOSED_CELLS, MIN_LOOP_PERIMETER_M, LOOP_SAFETY_BUFFER_PTS } from '../constants';
-import { calculateDistance, getIntersection, getEnclosedCellIds } from './geo';
+import { SNAP_TOLERANCE, MIN_ENCLOSED_CELLS, MIN_LOOP_PERIMETER_M } from '../constants';
+import { calculateDistance, getIntersection, getEnclosedCellIds, distanceSegmentToSegment } from './geo';
 
 export interface LoopResult {
   polygon: Point[];
@@ -12,24 +11,29 @@ export interface LoopResult {
 }
 
 /**
- * Remove pontos duplicados consecutivos e garante que o polígono seja fechado.
+ * Remove pontos duplicados consecutivos e garante que o polígono seja "watertight".
  */
 const cleanPolygon = (poly: Point[]): Point[] => {
   if (poly.length < 3) return [];
-  const result: Point[] = [poly[0]];
   
-  for (let i = 1; i < poly.length; i++) {
-    const p1 = poly[i - 1];
-    const p2 = poly[i];
-    if (p1.lat !== p2.lat || p1.lng !== p2.lng) {
-      result.push(p2);
+  const result: Point[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const prev = result[result.length - 1];
+    
+    // Evita duplicatas consecutivas exatas
+    if (!prev || (Math.abs(p.lat - prev.lat) > 1e-10 || Math.abs(p.lng - prev.lng) > 1e-10)) {
+      result.push(p);
     }
   }
 
-  const first = result[0];
-  const last = result[result.length - 1];
-  if (first.lat !== last.lat || first.lng !== last.lng) {
-    result.push({ ...first, timestamp: Date.now() });
+  // Garante fechamento estrito (primeiro == último)
+  if (result.length >= 3) {
+    const first = result[0];
+    const last = result[result.length - 1];
+    if (Math.abs(first.lat - last.lat) > 1e-10 || Math.abs(first.lng - last.lng) > 1e-10) {
+      result.push({ ...first, timestamp: Date.now() });
+    }
   }
 
   return result;
@@ -45,7 +49,8 @@ const isValidBoundingBox = (polygon: Point[]): boolean => {
   }
   const width = calculateDistance({ lat: minLat, lng: minLng }, { lat: minLat, lng: maxLng });
   const height = calculateDistance({ lat: minLat, lng: minLng }, { lat: maxLat, lng: minLng });
-  return width >= 15 && height >= 15;
+  // Mínimo relaxado para 10m para permitir capturas menores
+  return width >= 10 && height >= 10;
 };
 
 const calculatePathPerimeter = (pts: Point[]): number => {
@@ -60,34 +65,91 @@ export const detectClosedLoop = (
   path: Point[], 
   newLocation: Point
 ): LoopResult | null => {
-  if (path.length < LOOP_SAFETY_BUFFER_PTS + 5) return null;
+  if (!path || path.length < 3) return null;
 
   const pLast = path[path.length - 1];
   const pCurrent = newLocation;
-  const searchablePath = path.slice(0, path.length - LOOP_SAFETY_BUFFER_PTS);
+  const start = path[0];
 
-  // 1. Interseção
-  for (let i = searchablePath.length - 2; i >= 0; i--) {
-    const pA = searchablePath[i];
-    const pB = searchablePath[i + 1];
-    const intersection = getIntersection(pLast, pCurrent, pA, pB);
-    
-    if (intersection) {
-      const rawLoop = [intersection, ...path.slice(i + 1), pCurrent, intersection];
-      const loopPath = cleanPolygon(rawLoop);
-      const perimeter = calculatePathPerimeter(loopPath);
+  // --- PRIORIDADE ZERO: SNAP NO PONTO INICIAL ---
+  const distToStart = calculateDistance(pCurrent, start);
+  if (distToStart <= SNAP_TOLERANCE) {
+    const rawLoop = [...path, start]; 
+    const loopPath = cleanPolygon(rawLoop);
+    const perimeter = calculatePathPerimeter(loopPath);
 
-      if (perimeter < MIN_LOOP_PERIMETER_M) continue;
-
+    // No Start Snap, somos mais permissivos com o perímetro para garantir a jogabilidade
+    if (perimeter >= MIN_LOOP_PERIMETER_M * 0.8) {
       const enclosed = getEnclosedCellIds(loopPath);
-      if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
-        console.log("[LOOP OK]", { reason: "INTERSECTION", polygonLen: loopPath.length, enclosedLen: enclosed.length });
-        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
+      if (enclosed.length > 0 && isValidBoundingBox(loopPath)) {
+        console.log("[LOOP OK]", { type: "START_SNAP", cells: enclosed.length, dist: distToStart.toFixed(1) });
+        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: start };
       }
     }
   }
 
-  // 2. Snap
+  // Safety buffer adaptativo para não bloquear loops em trajetos curtos
+  let safetyBuffer = 0;
+  if (path.length >= 25) {
+    safetyBuffer = Math.min(10, Math.floor(path.length / 5));
+  }
+  
+  const searchablePath = path.slice(0, path.length - safetyBuffer);
+
+  // Fallback para logs de debug se o rastro for mínimo
+  if (searchablePath.length < 3) {
+    if (path.length > 10) {
+      console.log("[LOOP FAIL]", { 
+        pathLen: path.length, 
+        safetyBuffer, 
+        distToStart: distToStart.toFixed(1), 
+        snapTol: SNAP_TOLERANCE,
+        reason: "Searchable path too short" 
+      });
+    }
+    return null;
+  }
+
+  // 1. Prioridade: INTERSEÇÃO (Cruzamento real ou proximidade crítica)
+  let minSegDistFound = Infinity;
+  for (let i = searchablePath.length - 2; i >= 0; i--) {
+    const pA = searchablePath[i];
+    const pB = searchablePath[i + 1];
+    
+    let intersection = getIntersection(pLast, pCurrent, pA, pB);
+    
+    if (!intersection) {
+      const segDist = distanceSegmentToSegment(pLast, pCurrent, pA, pB);
+      if (segDist < minSegDistFound) minSegDistFound = segDist;
+      
+      // Tolerância de 3.5m para "quase cruzamentos"
+      if (segDist <= 3.5) {
+        intersection = { ...pA, timestamp: Date.now() };
+      }
+    }
+    
+    if (intersection) {
+      const rawLoop = [
+        intersection, 
+        ...path.slice(i + 1), 
+        pCurrent, 
+        intersection
+      ];
+      
+      const loopPath = cleanPolygon(rawLoop);
+      const perimeter = calculatePathPerimeter(loopPath);
+
+      if (perimeter >= MIN_LOOP_PERIMETER_M) {
+        const enclosed = getEnclosedCellIds(loopPath);
+        if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+          console.log("[LOOP OK]", { type: "INTERSECTION", cells: enclosed.length, perimeter: perimeter.toFixed(1) });
+          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
+        }
+      }
+    }
+  }
+
+  // 2. Secundário: SNAP GERAL (Qualquer ponto antigo no rastro)
   let bestSnapPoint: Point | null = null;
   let minSnapDist = Infinity;
   let bestSnapIndex = -1;
@@ -103,17 +165,35 @@ export const detectClosedLoop = (
   }
 
   if (bestSnapPoint && bestSnapIndex !== -1) {
-    const rawLoop = [...path.slice(bestSnapIndex), pCurrent, bestSnapPoint];
+    const rawLoop = [
+      bestSnapPoint,
+      ...path.slice(bestSnapIndex + 1),
+      pCurrent,
+      bestSnapPoint
+    ];
+    
     const loopPath = cleanPolygon(rawLoop);
     const perimeter = calculatePathPerimeter(loopPath);
 
     if (perimeter >= MIN_LOOP_PERIMETER_M) {
       const enclosed = getEnclosedCellIds(loopPath);
       if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
-        console.log("[LOOP OK]", { reason: "SNAP", polygonLen: loopPath.length, enclosedLen: enclosed.length });
+        console.log("[LOOP OK]", { type: "SNAP", cells: enclosed.length, dist: minSnapDist.toFixed(1) });
         return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: bestSnapPoint };
       }
     }
+  }
+
+  // Log final se não houver captura em um rastro significativo
+  if (path.length > 30 && path.length % 15 === 0) {
+    console.log("[LOOP NO_MATCH]", {
+      pathLen: path.length,
+      safetyBuffer,
+      distToStart: distToStart.toFixed(1),
+      minSegDist: minSegDistFound.toFixed(1),
+      snapTol: SNAP_TOLERANCE,
+      reason: "No triggers met"
+    });
   }
 
   return null;

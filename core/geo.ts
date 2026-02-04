@@ -26,6 +26,51 @@ export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: n
 };
 
 /**
+ * Calcula a distância em metros de um ponto P a um segmento AB.
+ */
+export const distancePointToSegment = (p: Point, a: Point, b: Point): number => {
+  const R = 6371e3;
+  const toRad = Math.PI / 180;
+  
+  // Projeção local simples (Equiretangular) para distâncias curtas (< 1km)
+  const cosLat = Math.cos(a.lat * toRad);
+  const x = (p.lng - a.lng) * cosLat * 111320;
+  const y = (p.lat - a.lat) * 111320;
+  
+  const x1 = 0, y1 = 0;
+  const x2 = (b.lng - a.lng) * cosLat * 111320;
+  const y2 = (b.lat - a.lat) * 111320;
+  
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  
+  if (l2 === 0) return Math.sqrt(x * x + y * y);
+  
+  let t = ((x - x1) * dx + (y - y1) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  
+  const px = x1 + t * dx;
+  const py = y1 + t * dy;
+  
+  const distSq = (x - px) * (x - px) + (y - py) * (y - py);
+  return Math.sqrt(distSq);
+};
+
+/**
+ * Calcula a distância mínima entre dois segmentos P1-P2 e A-B em metros.
+ */
+export const distanceSegmentToSegment = (p1: Point, p2: Point, a: Point, b: Point): number => {
+  // A distância mínima entre dois segmentos não-intersectantes ocorre em um dos 4 endpoints
+  return Math.min(
+    distancePointToSegment(p1, a, b),
+    distancePointToSegment(p2, a, b),
+    distancePointToSegment(a, p1, p2),
+    distancePointToSegment(b, p1, p2)
+  );
+};
+
+/**
  * Verifica se dois segmentos (P1-P2 e P3-P4) se interceptam.
  */
 export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
@@ -40,7 +85,7 @@ export const getIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Poi
   const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
   const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
 
-  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 0.999) {
+  if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
     return {
       lat: y1 + ua * (y2 - y1),
       lng: x1 + ua * (x2 - x1),
@@ -67,6 +112,7 @@ export const isPointInPolygon = (point: { lat: number, lng: number }, polygon: P
 
 /**
  * Retorna as células contidas dentro de um polígono fechado.
+ * Otimizado para incluir células que tocam as bordas.
  */
 export const getEnclosedCellIds = (polygon: Point[]): string[] => {
   if (polygon.length < 3) return [];
@@ -81,10 +127,12 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
     if (p.lng > maxLng) maxLng = p.lng;
   }
 
-  const iMinLat = Math.floor((minLat - GRID_SIZE) / GRID_SIZE);
-  const iMaxLat = Math.ceil((maxLat + GRID_SIZE) / GRID_SIZE);
-  const iMinLng = Math.floor((minLng - GRID_SIZE) / GRID_SIZE);
-  const iMaxLng = Math.ceil((maxLng + GRID_SIZE) / GRID_SIZE);
+  // Margem de segurança de meio grid para garantir cobertura total das bordas
+  const epsilon = GRID_SIZE * 0.5;
+  const iMinLat = Math.floor((minLat - epsilon) / GRID_SIZE);
+  const iMaxLat = Math.ceil((maxLat + epsilon) / GRID_SIZE);
+  const iMinLng = Math.floor((minLng - epsilon) / GRID_SIZE);
+  const iMaxLng = Math.ceil((maxLng + epsilon) / GRID_SIZE);
 
   const enclosed: string[] = [];
   
@@ -93,12 +141,13 @@ export const getEnclosedCellIds = (polygon: Point[]): string[] => {
       const cellLat = ilat * GRID_SIZE;
       const cellLng = ilng * GRID_SIZE;
       
+      // Amostragem multi-ponto para capturar células parciais na borda
       const testPoints = [
-        { lat: cellLat + GRID_SIZE * 0.5, lng: cellLng + GRID_SIZE * 0.5 },
-        { lat: cellLat + GRID_SIZE * 0.2, lng: cellLng + GRID_SIZE * 0.2 },
-        { lat: cellLat + GRID_SIZE * 0.8, lng: cellLng + GRID_SIZE * 0.8 },
-        { lat: cellLat + GRID_SIZE * 0.2, lng: cellLng + GRID_SIZE * 0.8 },
-        { lat: cellLat + GRID_SIZE * 0.8, lng: cellLng + GRID_SIZE * 0.2 }
+        { lat: cellLat + GRID_SIZE * 0.5, lng: cellLng + GRID_SIZE * 0.5 }, // Centro
+        { lat: cellLat + GRID_SIZE * 0.1, lng: cellLng + GRID_SIZE * 0.1 }, // Cantos internos
+        { lat: cellLat + GRID_SIZE * 0.9, lng: cellLng + GRID_SIZE * 0.9 },
+        { lat: cellLat + GRID_SIZE * 0.1, lng: cellLng + GRID_SIZE * 0.9 },
+        { lat: cellLat + GRID_SIZE * 0.9, lng: cellLng + GRID_SIZE * 0.1 }
       ];
 
       if (testPoints.some(tp => isPointInPolygon(tp, polygon))) {
@@ -176,7 +225,8 @@ export const chaikinSmooth = (points: Point[], iterations: number = 2): Point[] 
       });
     }
     // Fecha o loop se o original fosse fechado
-    if (points[0].lat === points[points.length-1].lat && points[0].lng === points[points.length-1].lng) {
+    if (Math.abs(points[0].lat - points[points.length-1].lat) < 1e-10 && 
+        Math.abs(points[0].lng - points[points.length-1].lng) < 1e-10) {
         next.push(next[0]);
     }
     smoothed = next;

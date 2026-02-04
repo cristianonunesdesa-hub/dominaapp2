@@ -1,6 +1,6 @@
 // Arquivo: components/GameMap.tsx
 
-import React, { useEffect, useRef, memo, useMemo } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import L from 'leaflet';
 import { Cell, User, Point, PublicUser, TerritoryShape } from '../types';
 import { simplifyPath, chaikinSmooth } from '../core/geo';
@@ -14,6 +14,7 @@ interface GameMapProps {
   activeUser: User | null;
   currentPath: Point[];
   onMapClick?: (lat: number, lng: number) => void;
+  introMode?: boolean;
 }
 
 const GameMap: React.FC<GameMapProps> = ({
@@ -24,12 +25,15 @@ const GameMap: React.FC<GameMapProps> = ({
   activeUserId,
   activeUser,
   currentPath = [],
-  onMapClick
+  onMapClick,
+  introMode = false
 }) => {
   const mapRef = useRef<L.Map | null>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerMarkerRef = useRef<L.Marker | null>(null);
   const polygonsRef = useRef<L.LayerGroup | null>(null);
+  const hasPerformedInitialFly = useRef(false);
+  const isFlying = useRef(false);
   
   const pathRef = useRef<Point[]>(currentPath);
   const activeUserRef = useRef<User | null>(activeUser);
@@ -79,8 +83,9 @@ const GameMap: React.FC<GameMapProps> = ({
     const map = L.map('dmn-tactical-map', {
       zoomControl: false, 
       attributionControl: false, 
-      preferCanvas: true
-    }).setView([userLocation?.lat || -23.55, userLocation?.lng || -46.63], 18);
+      preferCanvas: true,
+      zoomSnap: 0.1
+    }).setView([0, 0], 2);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 22, 
@@ -100,18 +105,41 @@ const GameMap: React.FC<GameMapProps> = ({
     };
   }, []);
 
+  // Lógica de Voo Inicial (Intro) - Ativada assim que introMode=false e userLocation existe
+  useEffect(() => {
+    if (!mapRef.current || introMode || !userLocation || hasPerformedInitialFly.current) return;
+    
+    // Pequeno delay para garantir que o mapa processou o setView(0,0,2) inicial e o container está estável
+    const timer = setTimeout(() => {
+      if (!mapRef.current || hasPerformedInitialFly.current) return;
+      
+      hasPerformedInitialFly.current = true;
+      isFlying.current = true;
+      
+      mapRef.current.flyTo([userLocation.lat, userLocation.lng], 18, {
+        duration: 3.5,
+        easeLinearity: 0.25
+      });
+
+      // Libera o pan normal após o tempo da animação
+      setTimeout(() => {
+        isFlying.current = false;
+      }, 4000);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [introMode, userLocation]);
+
   // Renderização de Polígonos Suaves (Territórios)
   useEffect(() => {
     if (!mapRef.current || !polygonsRef.current) return;
     polygonsRef.current.clearLayers();
 
     territoryShapes.forEach(shape => {
-      // 1. Pipeline de Suavização: RDP -> Chaikin
       const simplified = simplifyPath(shape.polygon, 0.000005);
       const smoothed = chaikinSmooth(simplified, 2);
       const latLngs = smoothed.map(p => [p.lat, p.lng] as [number, number]);
 
-      // 2. Camada de Glow (Abaixo)
       L.polygon(latLngs, {
         fill: false,
         stroke: true,
@@ -123,7 +151,6 @@ const GameMap: React.FC<GameMapProps> = ({
         interactive: false
       }).addTo(polygonsRef.current!);
 
-      // 3. Camada de Contorno e Preenchimento Fumê (Acima)
       L.polygon(latLngs, {
         fillColor: shape.ownerColor,
         fillOpacity: 0.16,
@@ -146,6 +173,7 @@ const GameMap: React.FC<GameMapProps> = ({
 
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
+    
     if (!playerMarkerRef.current) {
       playerMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
         icon: L.divIcon({
@@ -156,12 +184,15 @@ const GameMap: React.FC<GameMapProps> = ({
         }), 
         zIndexOffset: 1000
       }).addTo(mapRef.current);
-      mapRef.current.setView([userLocation.lat, userLocation.lng], 18);
     } else {
       playerMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
-      mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.8 });
+      
+      // Pan normal durante o jogo, se o voo inicial já terminou e não estamos em modo intro
+      if (hasPerformedInitialFly.current && !introMode && !isFlying.current) {
+        mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.8 });
+      }
     }
-  }, [userLocation]);
+  }, [userLocation, introMode]);
 
   return (
     <div className="h-full w-full bg-black relative overflow-hidden">

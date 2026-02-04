@@ -13,6 +13,7 @@ import ActivityOverlay from './components/ActivityOverlay';
 import Leaderboard from './components/Leaderboard';
 import MissionSummary from './components/MissionSummary';
 import TestSimulator from './components/TestSimulator';
+import IntroOverlay from './components/IntroOverlay';
 import { playVictorySound } from './utils/audio';
 
 const STORAGE_KEY = 'domina_user_profile';
@@ -87,6 +88,7 @@ const App: React.FC = () => {
   const [currentActivity, setCurrentActivity] = useState<Activity | null>(null);
   const [isTestMode, setIsTestMode] = useState(false);
   const [autopilotEnabled, setAutopilotEnabled] = useState(false);
+  const [introMode, setIntroMode] = useState(true);
   
   const activityRef = useRef<Activity | null>(null);
   const userLocationRef = useRef<Point | null>(null);
@@ -135,7 +137,6 @@ const App: React.FC = () => {
 
     setCells(prev => ({ ...prev, ...newCellsMap }));
     
-    // Armazena a forma visual
     setTerritoryShapes(prev => [
       ...prev,
       { id: `t_${Date.now()}`, ownerId: u.id, ownerColor: u.color, polygon }
@@ -154,8 +155,16 @@ const App: React.FC = () => {
 
     setCurrentActivity(prev => {
       if (!prev) return null;
-      const simplified = [loc];
-      return { ...prev, capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]), fullPath: [loc], points: simplified };
+      // Adiciona a localização atual ao rastro completo
+      const nextFull = [...prev.fullPath, loc];
+      // Reinicia o índice do segmento para o final do rastro atual
+      return { 
+        ...prev, 
+        capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]), 
+        fullPath: nextFull, 
+        segmentStartIndex: nextFull.length - 1, 
+        points: [loc] // Reset do rastro simplificado para o novo segmento
+      };
     });
     setTimeout(() => handleSync(true), 100);
   }, [handleSync]);
@@ -165,18 +174,25 @@ const App: React.FC = () => {
     if (!processed) return;
     
     setUserLocation(processed);
+
+    if (introMode) {
+      setTimeout(() => setIntroMode(false), 300);
+    }
     
     const currentAct = activityRef.current;
     if (currentAct && !isProcessingRef.current) {
-      const path = currentAct.fullPath;
-      const lastPoint = path.length > 0 ? path[path.length - 1] : null;
+      const fullPath = currentAct.fullPath;
+      const segmentPath = fullPath.slice(currentAct.segmentStartIndex);
+      const lastPoint = fullPath.length > 0 ? fullPath[fullPath.length - 1] : null;
       const dist = lastPoint ? calculateDistance(lastPoint, processed) : 0;
       
       const threshold = (force || isTestModeRef.current) ? 0.01 : MIN_MOVE_DISTANCE;
 
-      if (dist >= threshold || path.length === 0) {
+      if (dist >= threshold || fullPath.length === 0) {
         isProcessingRef.current = true;
-        const loop = detectClosedLoop(path, processed);
+        
+        // Detecção de loop baseada APENAS no segmento ativo desde a última captura
+        const loop = detectClosedLoop(segmentPath, processed);
         
         if (loop && loop.enclosedCellIds.length > 0) {
           handleCapture(loop.enclosedCellIds, loop.polygon, loop.closurePoint);
@@ -184,7 +200,8 @@ const App: React.FC = () => {
           setCurrentActivity(prev => {
             if (!prev) return null;
             const nextFull = [...prev.fullPath, processed];
-            const simplified = simplifyPath(nextFull, RDP_EPSILON);
+            const nextSegment = nextFull.slice(prev.segmentStartIndex);
+            const simplified = simplifyPath(nextSegment, RDP_EPSILON);
             return { 
               ...prev, 
               fullPath: nextFull, 
@@ -196,7 +213,7 @@ const App: React.FC = () => {
         isProcessingRef.current = false;
       }
     }
-  }, [handleCapture]);
+  }, [handleCapture, introMode]);
 
   const handleNewLocationRef = useRef(handleNewLocation);
   useEffect(() => { handleNewLocationRef.current = handleNewLocation; }, [handleNewLocation]);
@@ -247,6 +264,8 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full w-full bg-black overflow-hidden relative">
+      <IntroOverlay isVisible={introMode} />
+      
       <GameMap 
         userLocation={userLocation} 
         cells={cells} 
@@ -256,10 +275,11 @@ const App: React.FC = () => {
         activeUser={user} 
         currentPath={currentActivity?.fullPath || []} 
         onMapClick={handleMapClick} 
+        introMode={introMode}
       />
       
-      {view === AppState.HOME && user && (
-        <div className="absolute inset-x-0 bottom-10 p-6 flex flex-col gap-4 pointer-events-none z-[1000]">
+      {!introMode && view === AppState.HOME && user && (
+        <div className="absolute inset-x-0 bottom-10 p-6 flex flex-col gap-4 pointer-events-none z-[1000] animate-in slide-in-from-bottom-10 duration-700">
           <div className="bg-black/90 backdrop-blur-2xl p-4 rounded-3xl border border-white/10 flex justify-between items-center pointer-events-auto shadow-2xl">
             <div className="flex gap-4 items-center">
               <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center font-black italic border border-blue-500/30 text-blue-500 text-xl uppercase">{user.nickname[0]}</div>
@@ -270,7 +290,7 @@ const App: React.FC = () => {
             </div>
             <button onClick={() => setView(AppState.LEADERBOARD)} className="p-3 bg-white/5 rounded-2xl border border-white/10 active:scale-90 transition-all"><div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div></button>
           </div>
-          <button onClick={() => { if (!userLocationRef.current) return alert("Aguardando sinal..."); setCurrentActivity({ id: `a_${Date.now()}`, startTime: Date.now(), points: [userLocationRef.current], fullPath: [userLocationRef.current], capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="w-full bg-blue-600 py-7 rounded-[2.5rem] font-black text-2xl italic uppercase shadow-xl pointer-events-auto active:scale-95 transition-all border-b-[6px] border-blue-800 text-white">INICIAR DOMÍNIO</button>
+          <button onClick={() => { if (!userLocationRef.current) return alert("Aguardando sinal..."); setCurrentActivity({ id: `a_${Date.now()}`, startTime: Date.now(), points: [userLocationRef.current], fullPath: [userLocationRef.current], segmentStartIndex: 0, capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="w-full bg-blue-600 py-7 rounded-[2.5rem] font-black text-2xl italic uppercase shadow-xl pointer-events-auto active:scale-95 transition-all border-b-[6px] border-blue-800 text-white">INICIAR DOMÍNIO</button>
         </div>
       )}
       {view === AppState.ACTIVE && currentActivity && user && <ActivityOverlay activity={currentActivity} user={user} onStop={() => setView(AppState.SUMMARY)} />}
@@ -282,7 +302,7 @@ const App: React.FC = () => {
         onToggle={(active) => { setIsTestMode(active); if(!active) { setAutopilotEnabled(false); autopilotTargetRef.current = null; } }} 
         onLocationUpdate={handleNewLocation} 
         userLocation={userLocation} 
-        showOverlay={true} 
+        showOverlay={!introMode} 
         autopilotEnabled={autopilotEnabled} 
         onAutopilotToggle={(active) => { setAutopilotEnabled(active); if (!active) autopilotTargetRef.current = null; }} 
       />
