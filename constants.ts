@@ -14,10 +14,10 @@ export const MAX_IDLE_TIME = 4000;
 export const RDP_EPSILON = 0.000010;
 export const SNAP_TOLERANCE = 25;
 
-// Thresholds Equilibrados (Estilo INTVL - Modo Caminhada)
-export const MIN_ENCLOSED_CELLS = 2;        // Captura áreas menores
-export const MIN_LOOP_PERIMETER_M = 15;     // 15m permite loops em calçadas
-export const LOOP_SAFETY_BUFFER_METERS = 8;  // 8m de buffer para permitir voltas fechadas
+// Thresholds de Segurança (Estabilidade Total - Anti-Ghosting)
+export const MIN_ENCLOSED_CELLS = 5;         // Exige uma área mínima real
+export const MIN_LOOP_PERIMETER_M = 30;      // 30m é o padrão ouro do INTVL para evitar jitter
+export const LOOP_SAFETY_BUFFER_METERS = 15;  // 15m ignora ruídos de GPS na ponta do rastro
 
 export const COLORS = {
   PRIMARY: '#3B82F6',

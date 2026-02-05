@@ -44,7 +44,7 @@ const isValidBoundingBox = (polygon: Point[]): boolean => {
   }
   const width = calculateDistance({ lat: minLat, lng: minLng }, { lat: minLat, lng: maxLng });
   const height = calculateDistance({ lat: minLat, lng: minLng }, { lat: maxLat, lng: minLng });
-  return width >= 3 && height >= 3; // Reduzido de 5 para 3
+  return width >= 6 && height >= 6; // Aumentado para 6m para evitar "linhas"
 };
 
 const calculatePathPerimeter = (pts: Point[]): number => {
