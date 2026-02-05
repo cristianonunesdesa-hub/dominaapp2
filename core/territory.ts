@@ -1,7 +1,7 @@
 // Arquivo: core/territory.ts
 
 import { Point } from '../types';
-import { SNAP_TOLERANCE, MIN_ENCLOSED_CELLS, MIN_LOOP_PERIMETER_M, LOOP_SAFETY_BUFFER_PTS } from '../constants';
+import { SNAP_TOLERANCE, MIN_ENCLOSED_CELLS, MIN_LOOP_PERIMETER_M, LOOP_SAFETY_BUFFER_METERS } from '../constants';
 import { calculateDistance, getIntersection, getEnclosedCellIds } from './geo';
 
 export interface LoopResult {
@@ -79,51 +79,69 @@ export const detectClosedLoop = (
     }
   }
 
-  // 2. INTERSEÇÃO REAL (Estilo INTVL)
-  const safetyBuffer = Math.max(LOOP_SAFETY_BUFFER_PTS, 10);
-  const searchablePath = path.slice(0, path.length - safetyBuffer);
+  // --- BUFFER DE SEGURANÇA BASEADO EM DISTÂNCIA (Estilo INTVL) ---
+  // Em vez de pontos fixos, ignoramos os últimos metros do rastro.
+  let accumulatedDist = 0;
+  let safetyIndex = path.length - 1;
+  const BUFFER_METERS = LOOP_SAFETY_BUFFER_METERS;
 
-  if (searchablePath.length >= 2) {
-    for (let i = 0; i < searchablePath.length - 1; i++) {
-      const pA = searchablePath[i];
-      const pB = searchablePath[i + 1];
-      const intersection = getIntersection(pLast, pCurrent, pA, pB);
+  while (safetyIndex > 0 && accumulatedDist < BUFFER_METERS) {
+    accumulatedDist += calculateDistance(path[safetyIndex], path[safetyIndex - 1]);
+    safetyIndex--;
+  }
 
-      if (intersection) {
-        const rawLoop = [
-          intersection,
-          ...path.slice(i + 1),
-          intersection
-        ];
-        const loopPath = cleanPolygon(rawLoop);
-        const perimeter = calculatePathPerimeter(loopPath);
+  const searchablePath = path.slice(0, safetyIndex + 1);
+  if (searchablePath.length < 2) return null;
 
-        if (perimeter >= MIN_LOOP_PERIMETER_M) {
-          const enclosed = getEnclosedCellIds(loopPath);
-          if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
-            console.log("[INTVL CAPTURE]", { type: "INTERSECTION", cells: enclosed.length });
-            return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
-          }
+  // 1. Prioridade: INTERSEÇÃO REAL (O novo segmento cruza um antigo)
+  // Varremos do início para pegar o maior laço possível
+  for (let i = 0; i < searchablePath.length - 1; i++) {
+    const pA = searchablePath[i];
+    const pB = searchablePath[i + 1];
+
+    // getIntersection retorna o ponto exato onde as linhas se cruzam
+    const intersection = getIntersection(pLast, pCurrent, pA, pB);
+
+    if (intersection) {
+      // O loop deve ser: Ponto_Interseção -> Trecho do Rastro -> Ponto_Interseção
+      const rawLoop = [
+        intersection,
+        ...path.slice(i + 1),
+        intersection
+      ];
+
+      const loopPath = cleanPolygon(rawLoop);
+      const perimeter = calculatePathPerimeter(loopPath);
+
+      if (perimeter >= MIN_LOOP_PERIMETER_M) {
+        const enclosed = getEnclosedCellIds(loopPath);
+        if (enclosed.length >= MIN_ENCLOSED_CELLS) {
+          console.log("[INTVL LOOP]", { cells: enclosed.length, perim: perimeter.toFixed(1) });
+          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
         }
       }
     }
   }
 
-  // 3. SNAP/PROXIMIDADE (Fallback robusto)
+  // 2. Secundário: SNAP (Proximidade Crítica de 5 metros)
   for (let i = 0; i < searchablePath.length; i++) {
     const pTarget = searchablePath[i];
     const dist = calculateDistance(pCurrent, pTarget);
+
     if (dist <= 5.0) {
       const rawLoop = [
         pTarget,
         ...path.slice(i + 1),
         pTarget
       ];
+
       const loopPath = cleanPolygon(rawLoop);
       const perimeter = calculatePathPerimeter(loopPath);
+
       if (perimeter >= MIN_LOOP_PERIMETER_M) {
         const enclosed = getEnclosedCellIds(loopPath);
-        if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+        if (enclosed.length >= MIN_ENCLOSED_CELLS) {
+          console.log("[INTVL SNAP]", { dist: dist.toFixed(1) });
           return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: pTarget };
         }
       }

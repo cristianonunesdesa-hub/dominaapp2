@@ -155,15 +155,15 @@ const App: React.FC = () => {
 
     setCurrentActivity(prev => {
       if (!prev) return null;
-      // No INTVL, o rastro "ativo" (segmento) continua a partir do ponto de fechamento.
-      // Mantemos o fullPath para visualização, mas o segmentStartIndex garante que a lógica ignore o que já foi capturado.
+      // --- PODA CIRÚRGICA (Estilo INTVL) ---
+      // Mantemos o rastro ativo apenas do ponto de fechamento em diante.
       const nextFull = [...prev.fullPath, loc];
       return {
         ...prev,
         capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]),
         fullPath: nextFull,
         segmentStartIndex: nextFull.length - 1,
-        points: [loc] // Reset do rastro simplificado (RDP)
+        points: [loc]
       };
     });
     setTimeout(() => handleSync(true), 100);

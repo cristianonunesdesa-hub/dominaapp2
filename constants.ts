@@ -15,9 +15,9 @@ export const RDP_EPSILON = 0.000010;
 export const SNAP_TOLERANCE = 25;
 
 // Thresholds Equilibrados (Estilo INTVL)
-export const MIN_ENCLOSED_CELLS = 5;        // ~100m2 
-export const MIN_LOOP_PERIMETER_M = 40;     // Mínimo de 40m para evitar loops fantasmáticos
-export const LOOP_SAFETY_BUFFER_PTS = 15;   // Ignora os últimos passos para não fechar loop em si mesmo
+export const MIN_ENCLOSED_CELLS = 3;        // Mais fácil de capturar áreas pequenas
+export const MIN_LOOP_PERIMETER_M = 25;     // 25m é seguro para caminhada lenta
+export const LOOP_SAFETY_BUFFER_METERS = 15; // Ignora os últimos 15 metros de rastro
 
 export const COLORS = {
   PRIMARY: '#3B82F6',
