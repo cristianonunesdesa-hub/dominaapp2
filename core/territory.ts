@@ -88,14 +88,15 @@ export const detectClosedLoop = (
     }
   }
 
-  // Safety buffer minimal para permitir capturas imediatas
-  // Ignoramos apenas os últimos 2 pontos para evitar self-intersection instantânea
-  const safetyBuffer = Math.min(2, Math.floor(path.length / 2));
+  // Safety buffer balanceado (12 pontos) para evitar capturas em curvas
+  // Ignoramos o rastro mais recente para garantir que o loop seja real
+  const LOOP_SAFETY_BUFFER_PTS = 12; // Defined here as it's not in constants.ts
+  const safetyBuffer = Math.max(LOOP_SAFETY_BUFFER_PTS, Math.floor(path.length / 4));
 
   const searchablePath = path.slice(0, path.length - safetyBuffer);
 
   // Fallback para logs de debug se o rastro for mínimo
-  if (searchablePath.length < 2) return null;
+  if (searchablePath.length < 5) return null;
 
   // 1. Prioridade: INTERSEÇÃO (Cruzamento real ou proximidade crítica)
   let minSegDistFound = Infinity;
@@ -109,23 +110,25 @@ export const detectClosedLoop = (
       const segDist = distanceSegmentToSegment(pLast, pCurrent, pA, pB);
       if (segDist < minSegDistFound) minSegDistFound = segDist;
 
-      // Tolerância de 5m para "quase cruzamentos" (mais permissivo)
-      if (segDist <= 5.0) {
+      // Proximidade para fechar o loop (3 metros - mais rigoroso para evitar erros)
+      if (segDist <= 3.0) {
         intersection = { ...pB, timestamp: Date.now() };
       }
     }
 
     if (intersection) {
-      // Loop: Interseção -> Pontos do rastro -> Interseção
+      // O polígono do loop deve conter apenas os pontos entre a interseção e o ponto atual
       const rawLoop = [
         intersection,
         ...path.slice(i + 1),
+        pCurrent,
         intersection
       ];
 
       const loopPath = cleanPolygon(rawLoop);
       const perimeter = calculatePathPerimeter(loopPath);
 
+      // Verificação estrita de perímetro e área
       if (perimeter >= MIN_LOOP_PERIMETER_M) {
         const enclosed = getEnclosedCellIds(loopPath);
         if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {

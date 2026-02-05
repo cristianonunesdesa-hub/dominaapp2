@@ -294,7 +294,22 @@ const App: React.FC = () => {
         </div>
       )}
       {view === AppState.ACTIVE && currentActivity && user && <ActivityOverlay activity={currentActivity} user={user} onStop={() => setView(AppState.SUMMARY)} />}
-      {view === AppState.SUMMARY && currentActivity && user && <MissionSummary activity={currentActivity} user={user} onFinish={() => { const capturedCount = currentActivity.capturedCellIds.size; const xpGained = calculateSessionXp(currentActivity.distanceMeters, capturedCount); const updated = { ...user, xp: (user.xp || 0) + xpGained, level: calculateLevelFromXp((user.xp || 0) + xpGained), cellsOwned: (user.cellsOwned || 0) + capturedCount, totalAreaM2: (user.totalAreaM2 || 0) + (capturedCount * CELL_AREA_M2) }; setUser(updated); setCurrentActivity(null); handleSync(true); setView(AppState.HOME); }} />}
+      {view === AppState.SUMMARY && currentActivity && user && <MissionSummary activity={currentActivity} user={user} onFinish={() => {
+        if (!currentActivity || !user) return;
+        const capturedCount = currentActivity.capturedCellIds?.size || 0;
+        const xpGained = calculateSessionXp(currentActivity.distanceMeters || 0, capturedCount);
+        const updated = {
+          ...user,
+          xp: (user.xp || 0) + xpGained,
+          level: calculateLevelFromXp((user.xp || 0) + xpGained),
+          cellsOwned: (user.cellsOwned || 0) + capturedCount,
+          totalAreaM2: (user.totalAreaM2 || 0) + (capturedCount * CELL_AREA_M2)
+        };
+        setUser(updated);
+        setCurrentActivity(null);
+        handleSync(true);
+        setView(AppState.HOME);
+      }} />}
       {view === AppState.LEADERBOARD && <Leaderboard entries={(Object.values(users) as PublicUser[]).map(u => ({ id: u.id, nickname: u.nickname, totalAreaM2: u.totalAreaM2, level: u.level, color: u.color, avatarUrl: u.avatarUrl }))} currentUserId={user?.id || ''} onBack={() => setView(AppState.HOME)} />}
 
       <TestSimulator
