@@ -44,21 +44,20 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="fixed left-4 z-[9999] flex flex-col gap-2 pointer-events-none"
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
     >
       <button
         onClick={() => onToggle(!isEnabled)}
-        className={`pointer-events-auto px-4 py-2.5 rounded-full border-2 flex items-center gap-2 transition-all shadow-lg active:scale-90 ${
-          isEnabled
+        className={`pointer-events-auto px-3 py-1.5 rounded-full border flex items-center gap-1.5 transition-all shadow-md active:scale-90 ${isEnabled
             ? 'bg-[#f15a24] border-white text-white scale-100'
             : 'bg-black/90 border-white/20 text-white/50'
-        }`}
+          }`}
       >
-        <Zap size={14} className={isEnabled ? 'fill-white animate-pulse' : ''} />
-        <span className="text-[10px] font-black uppercase tracking-wider">
-          {isEnabled ? 'DEBUG ATIVO' : 'MODO TESTE'}
+        <Zap size={10} className={isEnabled ? 'fill-white animate-pulse' : ''} />
+        <span className="text-[9px] font-black uppercase tracking-wider">
+          {isEnabled ? 'DEBUG' : 'MODO TESTE'}
         </span>
       </button>
 
@@ -79,11 +78,10 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
           <div className="space-y-3">
             <button
               onClick={() => onAutopilotToggle(!autopilotEnabled)}
-              className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-                autopilotEnabled
+              className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${autopilotEnabled
                   ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)] border-green-400'
                   : 'bg-white/5 text-white/30 border border-white/10'
-              }`}
+                }`}
             >
               {autopilotEnabled ? 'AUTO WALK: ON' : 'AUTO WALK: OFF'}
             </button>
@@ -99,7 +97,7 @@ const TestSimulator: React.FC<TestSimulatorProps> = ({
 
             <div className="p-3 bg-white/[0.02] rounded-2xl border border-white/5 mt-1">
               <p className="text-[8px] leading-tight text-white/40 font-black uppercase italic text-center tracking-tight">
-                {userLocation 
+                {userLocation
                   ? "CLIQUE NO MAPA PARA DEFINIR DESTINO."
                   : "CLIQUE PARA TELEPORTAR E INICIAR."}
               </p>

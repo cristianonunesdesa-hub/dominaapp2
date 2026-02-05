@@ -279,18 +279,18 @@ const App: React.FC = () => {
       />
 
       {!introMode && view === AppState.HOME && user && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[85%] flex flex-col gap-3 pointer-events-none z-[1000] animate-in slide-in-from-bottom-10 duration-700">
-          <div className="bg-black/90 backdrop-blur-2xl p-3 rounded-2xl border border-white/10 flex justify-between items-center pointer-events-auto shadow-2xl">
-            <div className="flex gap-3 items-center">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center font-black italic border border-blue-500/30 text-blue-500 text-lg uppercase">{user.nickname[0]}</div>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[75%] max-w-[300px] flex flex-col gap-2 pointer-events-none z-[1000] animate-in slide-in-from-bottom-10 duration-700">
+          <div className="bg-black/90 backdrop-blur-2xl p-2 rounded-xl border border-white/10 flex justify-between items-center pointer-events-auto shadow-xl">
+            <div className="flex gap-2 items-center">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center font-black italic border border-blue-500/30 text-blue-500 text-sm uppercase">{user.nickname[0]}</div>
               <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">{user.nickname}</div>
-                <div className="text-[9px] text-blue-500 font-bold tracking-widest mt-0.5 uppercase">NÍVEL {user.level}</div>
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/90">{user.nickname}</div>
+                <div className="text-[8px] text-blue-500 font-bold tracking-widest mt-0.5 uppercase">NÍVEL {user.level}</div>
               </div>
             </div>
-            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-2 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div></button>
+            <button onClick={() => setView(AppState.LEADERBOARD)} className="p-1.5 bg-white/5 rounded-lg border border-white/10 active:scale-90 transition-all"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div></button>
           </div>
-          <button onClick={() => { if (!userLocationRef.current) return alert("Aguardando sinal..."); setCurrentActivity({ id: `a_${Date.now()}`, startTime: Date.now(), points: [userLocationRef.current], fullPath: [userLocationRef.current], segmentStartIndex: 0, capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="w-full bg-blue-600 py-4 rounded-xl font-black text-lg italic uppercase shadow-xl pointer-events-auto active:scale-95 transition-all border-b-4 border-blue-800 text-white">INICIAR DOMÍNIO</button>
+          <button onClick={() => { if (!userLocationRef.current) return alert("Aguardando sinal..."); setCurrentActivity({ id: `a_${Date.now()}`, startTime: Date.now(), points: [userLocationRef.current], fullPath: [userLocationRef.current], segmentStartIndex: 0, capturedCellIds: new Set(), stolenCellIds: new Set(), distanceMeters: 0, isValid: true, strategicZonesEntered: 0 }); setView(AppState.ACTIVE); }} className="w-full bg-blue-600 py-3 rounded-xl font-black text-sm italic uppercase shadow-lg pointer-events-auto active:scale-95 transition-all border-b-2 border-blue-800 text-white">INICIAR DOMÍNIO</button>
         </div>
       )}
       {view === AppState.ACTIVE && currentActivity && user && <ActivityOverlay activity={currentActivity} user={user} onStop={() => setView(AppState.SUMMARY)} />}
