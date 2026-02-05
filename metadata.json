@@ -1,0 +1,7 @@
+{
+  "name": "Domina - Conquest by Movement",
+  "description": "A gamified fitness app where users capture map territories by running or walking through them. Dominate your city, one cell at a time.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
