@@ -80,66 +80,66 @@ export const detectClosedLoop = (
     }
   }
 
-  // --- BUFFER DE SEGURANÇA BASEADO EM DISTÂNCIA (Estilo INTVL) ---
-  let accumulatedDist = 0;
-  let safetyIndex = path.length - 1;
-  const BUFFER_METERS = LOOP_SAFETY_BUFFER_METERS;
+  // --- BUFFER DE SEGURANÇA DINÂMICO (Melhor que o INTVL) ---
+  const BASE_BUFFER = LOOP_SAFETY_BUFFER_METERS; // 15m para snaps (evita jitter)
+  const INTERSECTION_BUFFER = 7.0;               // 7m para interseções reais (mais rápido)
 
-  while (safetyIndex > 0 && accumulatedDist < BUFFER_METERS) {
-    accumulatedDist += calculateDistance(path[safetyIndex], path[safetyIndex - 1]);
-    safetyIndex--;
+  // 1. Prioridade: INTERSEÇÃO REAL (Fácil de detectar ao cruzar, menos propensa a ruído)
+  let accumulatedDistInt = 0;
+  let safetyIndexInt = path.length - 1;
+  while (safetyIndexInt > 0 && accumulatedDistInt < INTERSECTION_BUFFER) {
+    accumulatedDistInt += calculateDistance(path[safetyIndexInt], path[safetyIndexInt - 1]);
+    safetyIndexInt--;
   }
+  const searchablePathInt = path.slice(0, safetyIndexInt + 1);
 
-  const searchablePath = path.slice(0, safetyIndex + 1);
-  if (searchablePath.length < 2) return null;
+  if (searchablePathInt.length >= 2) {
+    for (let i = 0; i < searchablePathInt.length - 1; i++) {
+      const pA = searchablePathInt[i];
+      const pB = searchablePathInt[i + 1];
+      const intersection = getIntersection(pLast, pCurrent, pA, pB);
 
-  // 1. Prioridade: INTERSEÇÃO REAL
-  for (let i = 0; i < searchablePath.length - 1; i++) {
-    const pA = searchablePath[i];
-    const pB = searchablePath[i + 1];
+      if (intersection) {
+        const rawLoop = [intersection, ...path.slice(i + 1), intersection];
+        const loopPath = cleanPolygon(rawLoop);
+        const perimeter = calculatePathPerimeter(loopPath);
 
-    const intersection = getIntersection(pLast, pCurrent, pA, pB);
-
-    if (intersection) {
-      const rawLoop = [
-        intersection,
-        ...path.slice(i + 1),
-        intersection
-      ];
-
-      const loopPath = cleanPolygon(rawLoop);
-      const perimeter = calculatePathPerimeter(loopPath);
-
-      if (perimeter >= MIN_LOOP_PERIMETER_M) {
-        const enclosed = getEnclosedCellIds(loopPath);
-        if (enclosed.length >= MIN_ENCLOSED_CELLS) {
-          console.log("[INTVL LOOP]", { cells: enclosed.length });
-          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection, intersectionIndex: i + 1 };
+        if (perimeter >= MIN_LOOP_PERIMETER_M) {
+          const enclosed = getEnclosedCellIds(loopPath);
+          if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+            console.log("[FAST INTERSECT]", { cells: enclosed.length });
+            return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection, intersectionIndex: i + 1 };
+          }
         }
       }
     }
   }
 
-  // 2. Secundário: SNAP
-  for (let i = 0; i < searchablePath.length; i++) {
-    const pTarget = searchablePath[i];
-    const dist = calculateDistance(pCurrent, pTarget);
+  // 2. Secundário: SNAP (Proximidade, precisa de 15m de segurança)
+  let accumulatedDistSnap = 0;
+  let safetyIndexSnap = path.length - 1;
+  while (safetyIndexSnap > 0 && accumulatedDistSnap < BASE_BUFFER) {
+    accumulatedDistSnap += calculateDistance(path[safetyIndexSnap], path[safetyIndexSnap - 1]);
+    safetyIndexSnap--;
+  }
+  const searchablePathSnap = path.slice(0, safetyIndexSnap + 1);
 
-    if (dist <= 6.0) { // Tolerância aumentada para 6m
-      const rawLoop = [
-        pTarget,
-        ...path.slice(i + 1),
-        pTarget
-      ];
+  if (searchablePathSnap.length > 0) {
+    for (let i = 0; i < searchablePathSnap.length; i++) {
+      const pTarget = searchablePathSnap[i];
+      const dist = calculateDistance(pCurrent, pTarget);
 
-      const loopPath = cleanPolygon(rawLoop);
-      const perimeter = calculatePathPerimeter(loopPath);
+      if (dist <= 6.0) {
+        const rawLoop = [pTarget, ...path.slice(i + 1), pTarget];
+        const loopPath = cleanPolygon(rawLoop);
+        const perimeter = calculatePathPerimeter(loopPath);
 
-      if (perimeter >= MIN_LOOP_PERIMETER_M) {
-        const enclosed = getEnclosedCellIds(loopPath);
-        if (enclosed.length >= MIN_ENCLOSED_CELLS) {
-          console.log("[INTVL SNAP]", { dist: dist.toFixed(1) });
-          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: pTarget, intersectionIndex: i };
+        if (perimeter >= MIN_LOOP_PERIMETER_M) {
+          const enclosed = getEnclosedCellIds(loopPath);
+          if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
+            console.log("[SAFE SNAP]", { dist: dist.toFixed(1) });
+            return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: pTarget, intersectionIndex: i };
+          }
         }
       }
     }

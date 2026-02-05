@@ -155,19 +155,19 @@ const App: React.FC = () => {
 
     setCurrentActivity(prev => {
       if (!prev) return null;
-      // --- PODA CIRÚRGICA (Estilo INTVL) ---
-      // O novo rastro começa exatamente onde o loop terminou (no cruzamento).
-      // Isso permite que o "caule" do laço continue sendo parte do rastro ativo para o próximo laço.
-      const nextFull = [...prev.fullPath, loc];
-      const absoluteIntersectionIndex = prev.segmentStartIndex + intersectionIndex;
+      // --- TRUE PATH SLICING (Estratégia Superior ao INTVL) ---
+      const absoluteIdx = prev.segmentStartIndex + intersectionIndex;
+      const stemPath = prev.fullPath.slice(0, absoluteIdx + 1);
+
+      // Para o rastro ficar "bonito" e conectado, incluímos o ponto de fechamento oficial
+      const nextFull = [...stemPath, loc];
 
       return {
         ...prev,
         capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]),
         fullPath: nextFull,
-        // PODA CIRÚRGICA: Mantemos o "caule" do rastro ativo para novas capturas
-        segmentStartIndex: absoluteIntersectionIndex,
-        points: [loc]
+        segmentStartIndex: nextFull.length - 1,
+        points: [loc] // O visual de 'pontos' simplificados reseta para o atual
       };
     });
     setTimeout(() => handleSync(true), 100);
