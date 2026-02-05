@@ -8,6 +8,7 @@ export interface LoopResult {
   polygon: Point[];
   enclosedCellIds: string[];
   closurePoint: Point;
+  intersectionIndex: number; // Índice no rastro original onde o loop começou
 }
 
 /**
@@ -43,7 +44,7 @@ const isValidBoundingBox = (polygon: Point[]): boolean => {
   }
   const width = calculateDistance({ lat: minLat, lng: minLng }, { lat: minLat, lng: maxLng });
   const height = calculateDistance({ lat: minLat, lng: minLng }, { lat: maxLat, lng: minLng });
-  return width >= 5 && height >= 5;
+  return width >= 3 && height >= 3; // Reduzido de 5 para 3
 };
 
 const calculatePathPerimeter = (pts: Point[]): number => {
@@ -74,13 +75,12 @@ export const detectClosedLoop = (
     if (perimeter >= MIN_LOOP_PERIMETER_M) {
       const enclosed = getEnclosedCellIds(loopPath);
       if (enclosed.length >= MIN_ENCLOSED_CELLS && isValidBoundingBox(loopPath)) {
-        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: start };
+        return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: start, intersectionIndex: 0 };
       }
     }
   }
 
   // --- BUFFER DE SEGURANÇA BASEADO EM DISTÂNCIA (Estilo INTVL) ---
-  // Em vez de pontos fixos, ignoramos os últimos metros do rastro.
   let accumulatedDist = 0;
   let safetyIndex = path.length - 1;
   const BUFFER_METERS = LOOP_SAFETY_BUFFER_METERS;
@@ -93,17 +93,14 @@ export const detectClosedLoop = (
   const searchablePath = path.slice(0, safetyIndex + 1);
   if (searchablePath.length < 2) return null;
 
-  // 1. Prioridade: INTERSEÇÃO REAL (O novo segmento cruza um antigo)
-  // Varremos do início para pegar o maior laço possível
+  // 1. Prioridade: INTERSEÇÃO REAL
   for (let i = 0; i < searchablePath.length - 1; i++) {
     const pA = searchablePath[i];
     const pB = searchablePath[i + 1];
 
-    // getIntersection retorna o ponto exato onde as linhas se cruzam
     const intersection = getIntersection(pLast, pCurrent, pA, pB);
 
     if (intersection) {
-      // O loop deve ser: Ponto_Interseção -> Trecho do Rastro -> Ponto_Interseção
       const rawLoop = [
         intersection,
         ...path.slice(i + 1),
@@ -116,19 +113,19 @@ export const detectClosedLoop = (
       if (perimeter >= MIN_LOOP_PERIMETER_M) {
         const enclosed = getEnclosedCellIds(loopPath);
         if (enclosed.length >= MIN_ENCLOSED_CELLS) {
-          console.log("[INTVL LOOP]", { cells: enclosed.length, perim: perimeter.toFixed(1) });
-          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection };
+          console.log("[INTVL LOOP]", { cells: enclosed.length });
+          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: intersection, intersectionIndex: i + 1 };
         }
       }
     }
   }
 
-  // 2. Secundário: SNAP (Proximidade Crítica de 5 metros)
+  // 2. Secundário: SNAP
   for (let i = 0; i < searchablePath.length; i++) {
     const pTarget = searchablePath[i];
     const dist = calculateDistance(pCurrent, pTarget);
 
-    if (dist <= 5.0) {
+    if (dist <= 6.0) { // Tolerância aumentada para 6m
       const rawLoop = [
         pTarget,
         ...path.slice(i + 1),
@@ -142,7 +139,7 @@ export const detectClosedLoop = (
         const enclosed = getEnclosedCellIds(loopPath);
         if (enclosed.length >= MIN_ENCLOSED_CELLS) {
           console.log("[INTVL SNAP]", { dist: dist.toFixed(1) });
-          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: pTarget };
+          return { polygon: loopPath, enclosedCellIds: enclosed, closurePoint: pTarget, intersectionIndex: i };
         }
       }
     }

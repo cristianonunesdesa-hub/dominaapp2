@@ -14,10 +14,10 @@ export const MAX_IDLE_TIME = 4000;
 export const RDP_EPSILON = 0.000010;
 export const SNAP_TOLERANCE = 25;
 
-// Thresholds Equilibrados (Estilo INTVL)
-export const MIN_ENCLOSED_CELLS = 3;        // Mais fácil de capturar áreas pequenas
-export const MIN_LOOP_PERIMETER_M = 25;     // 25m é seguro para caminhada lenta
-export const LOOP_SAFETY_BUFFER_METERS = 15; // Ignora os últimos 15 metros de rastro
+// Thresholds Equilibrados (Estilo INTVL - Modo Caminhada)
+export const MIN_ENCLOSED_CELLS = 2;        // Captura áreas menores
+export const MIN_LOOP_PERIMETER_M = 15;     // 15m permite loops em calçadas
+export const LOOP_SAFETY_BUFFER_METERS = 8;  // 8m de buffer para permitir voltas fechadas
 
 export const COLORS = {
   PRIMARY: '#3B82F6',

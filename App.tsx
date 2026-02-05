@@ -126,7 +126,7 @@ const App: React.FC = () => {
     } catch (e) { console.error("[SYNC ERROR]", e); }
   }, []);
 
-  const handleCapture = useCallback((enclosedIds: string[], polygon: Point[], loc: Point) => {
+  const handleCapture = useCallback((enclosedIds: string[], polygon: Point[], loc: Point, intersectionIndex: number) => {
     const u = userRef.current;
     if (!u || !enclosedIds.length) return;
 
@@ -156,12 +156,16 @@ const App: React.FC = () => {
     setCurrentActivity(prev => {
       if (!prev) return null;
       // --- PODA CIRÚRGICA (Estilo INTVL) ---
-      // Mantemos o rastro ativo apenas do ponto de fechamento em diante.
+      // O novo rastro começa exatamente onde o loop terminou (no cruzamento).
+      // Isso permite que o "caule" do laço continue sendo parte do rastro ativo para o próximo laço.
       const nextFull = [...prev.fullPath, loc];
+      const absoluteIntersectionIndex = prev.segmentStartIndex + intersectionIndex;
+
       return {
         ...prev,
         capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]),
         fullPath: nextFull,
+        // Mantemos o rastro "limpo" a partir do ponto de fechamento
         segmentStartIndex: nextFull.length - 1,
         points: [loc]
       };
@@ -195,7 +199,7 @@ const App: React.FC = () => {
         const loop = detectClosedLoop(segmentPath, processed);
 
         if (loop && loop.enclosedCellIds.length > 0) {
-          handleCapture(loop.enclosedCellIds, loop.polygon, loop.closurePoint);
+          handleCapture(loop.enclosedCellIds, loop.polygon, processed, loop.intersectionIndex);
         } else {
           setCurrentActivity(prev => {
             if (!prev) return null;
