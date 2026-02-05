@@ -18,12 +18,11 @@ const IntroOverlay: React.FC<IntroOverlayProps> = ({ isVisible }) => {
   if (!shouldRender) return null;
 
   return (
-    <div 
-      className={`fixed inset-0 z-[9000] pointer-events-none transition-opacity duration-[2500ms] ease-in-out ${
-        isVisible ? 'opacity-100' : 'opacity-0'
-      }`}
+    <div
+      className={`fixed inset-0 z-[9000] pointer-events-none transition-opacity duration-[2500ms] ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'
+        }`}
       style={{
-        background: 'radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.8) 60%, #000 100%), #050a14'
+        background: 'radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.8) 60%, #000 100%), rgb(0, 206, 209)'
       }}
     >
       {/* Estrelas Estáticas */}
@@ -41,7 +40,7 @@ const IntroOverlay: React.FC<IntroOverlayProps> = ({ isVisible }) => {
           />
         ))}
       </div>
-      
+
       {/* Glow do "Globo" */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="w-[80vw] h-[80vw] rounded-full border border-blue-500/10 shadow-[0_0_100px_rgba(59,130,246,0.1)]"></div>
