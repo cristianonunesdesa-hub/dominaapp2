@@ -24,7 +24,9 @@ export const COLORS = {
   ACCENT: '#10B981',
   DANGER: '#FF5A5F',
   NEUTRAL: '#4B5563',
-  GOLD: '#F59E0B'
+  GOLD: '#F59E0B',
+  TACTICAL_GREEN: '#10B981',
+  TACTICAL_CYAN: '#06B6D4'
 };
 
 export const TACTICAL_COLORS = [
