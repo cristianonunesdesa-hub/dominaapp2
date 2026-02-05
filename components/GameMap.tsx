@@ -34,7 +34,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const polygonsRef = useRef<L.LayerGroup | null>(null);
   const hasPerformedInitialFly = useRef(false);
   const isFlying = useRef(false);
-  
+
   const pathRef = useRef<Point[]>(currentPath);
   const activeUserRef = useRef<User | null>(activeUser);
 
@@ -54,19 +54,19 @@ const GameMap: React.FC<GameMapProps> = ({
     if (currentTrail.length > 1) {
       const color = activeUserRef.current?.color || '#3B82F6';
       const points = currentTrail.map(p => map.latLngToContainerPoint([p.lat, p.lng]));
-      
+
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].y);
       points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-      
+
       ctx.globalAlpha = 0.2;
       ctx.strokeStyle = color;
       ctx.lineWidth = 12;
       ctx.stroke();
-      
+
       ctx.globalAlpha = 0.9;
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -81,14 +81,14 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     if (mapRef.current) return;
     const map = L.map('dmn-tactical-map', {
-      zoomControl: false, 
-      attributionControl: false, 
+      zoomControl: false,
+      attributionControl: false,
       preferCanvas: true,
       zoomSnap: 0.1
     }).setView([0, 0], 2);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 22, 
+      maxZoom: 22,
       className: 'map-tiles'
     }).addTo(map);
 
@@ -96,26 +96,26 @@ const GameMap: React.FC<GameMapProps> = ({
 
     map.on('move zoom viewreset resize', redraw);
     map.on('click', (e) => onMapClick?.(e.latlng.lat, e.latlng.lng));
-    
+
     mapRef.current = map;
     redraw();
-    return () => { 
-      if (map) map.remove(); 
-      mapRef.current = null; 
+    return () => {
+      if (map) map.remove();
+      mapRef.current = null;
     };
   }, []);
 
   // Lógica de Voo Inicial (Intro) - Ativada assim que introMode=false e userLocation existe
   useEffect(() => {
     if (!mapRef.current || introMode || !userLocation || hasPerformedInitialFly.current) return;
-    
+
     // Pequeno delay para garantir que o mapa processou o setView(0,0,2) inicial e o container está estável
     const timer = setTimeout(() => {
       if (!mapRef.current || hasPerformedInitialFly.current) return;
-      
+
       hasPerformedInitialFly.current = true;
       isFlying.current = true;
-      
+
       mapRef.current.flyTo([userLocation.lat, userLocation.lng], 18, {
         duration: 3.5,
         easeLinearity: 0.25
@@ -145,7 +145,7 @@ const GameMap: React.FC<GameMapProps> = ({
         stroke: true,
         weight: 15,
         color: shape.ownerColor,
-        opacity: 0.08,
+        opacity: 0.12, // Um pouco mais de brilho externo
         lineJoin: 'round',
         lineCap: 'round',
         interactive: false
@@ -153,11 +153,11 @@ const GameMap: React.FC<GameMapProps> = ({
 
       L.polygon(latLngs, {
         fillColor: shape.ownerColor,
-        fillOpacity: 0.16,
+        fillOpacity: 0.35, // Preenchimento bem mais visível
         stroke: true,
-        weight: 2,
+        weight: 2.5,
         color: shape.ownerColor,
-        opacity: 0.8,
+        opacity: 0.9,
         lineJoin: 'round',
         lineCap: 'round',
         interactive: false
@@ -173,20 +173,20 @@ const GameMap: React.FC<GameMapProps> = ({
 
   useEffect(() => {
     if (!mapRef.current || !userLocation) return;
-    
+
     if (!playerMarkerRef.current) {
       playerMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
         icon: L.divIcon({
           className: 'player-marker',
           html: `<div class="relative w-14 h-14 flex items-center justify-center"><div class="absolute inset-0 bg-blue-500/10 blur-2xl rounded-full player-pulse"></div><div class="w-4 h-4 rounded-full bg-white border-4 border-blue-600 shadow-[0_0_25px_rgba(37,99,235,1)]"></div></div>`,
-          iconSize: [56, 56], 
+          iconSize: [56, 56],
           iconAnchor: [28, 28]
-        }), 
+        }),
         zIndexOffset: 1000
       }).addTo(mapRef.current);
     } else {
       playerMarkerRef.current.setLatLng([userLocation.lat, userLocation.lng]);
-      
+
       // Pan normal durante o jogo, se o voo inicial já terminou e não estamos em modo intro
       if (hasPerformedInitialFly.current && !introMode && !isFlying.current) {
         mapRef.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.8 });

@@ -15,12 +15,12 @@ export interface LoopResult {
  */
 const cleanPolygon = (poly: Point[]): Point[] => {
   if (poly.length < 3) return [];
-  
+
   const result: Point[] = [];
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i];
     const prev = result[result.length - 1];
-    
+
     // Evita duplicatas consecutivas exatas
     if (!prev || (Math.abs(p.lat - prev.lat) > 1e-10 || Math.abs(p.lng - prev.lng) > 1e-10)) {
       result.push(p);
@@ -56,13 +56,13 @@ const isValidBoundingBox = (polygon: Point[]): boolean => {
 const calculatePathPerimeter = (pts: Point[]): number => {
   let dist = 0;
   for (let i = 0; i < pts.length - 1; i++) {
-    dist += calculateDistance(pts[i], pts[i+1]);
+    dist += calculateDistance(pts[i], pts[i + 1]);
   }
   return dist;
 };
 
 export const detectClosedLoop = (
-  path: Point[], 
+  path: Point[],
   newLocation: Point
 ): LoopResult | null => {
   if (!path || path.length < 3) return null;
@@ -74,7 +74,7 @@ export const detectClosedLoop = (
   // --- PRIORIDADE ZERO: SNAP NO PONTO INICIAL ---
   const distToStart = calculateDistance(pCurrent, start);
   if (distToStart <= SNAP_TOLERANCE) {
-    const rawLoop = [...path, start]; 
+    const rawLoop = [...path, start];
     const loopPath = cleanPolygon(rawLoop);
     const perimeter = calculatePathPerimeter(loopPath);
 
@@ -88,23 +88,21 @@ export const detectClosedLoop = (
     }
   }
 
-  // Safety buffer adaptativo para não bloquear loops em trajetos curtos
-  let safetyBuffer = 0;
-  if (path.length >= 25) {
-    safetyBuffer = Math.min(10, Math.floor(path.length / 5));
-  }
-  
+  // Safety buffer fixo e reduzido para permitir loops mais "apertados"
+  // Ignoramos apenas os últimos 5 pontos para evitar falsos positivos com o movimento imediato
+  const safetyBuffer = Math.min(5, Math.floor(path.length / 2));
+
   const searchablePath = path.slice(0, path.length - safetyBuffer);
 
   // Fallback para logs de debug se o rastro for mínimo
   if (searchablePath.length < 3) {
     if (path.length > 10) {
-      console.log("[LOOP FAIL]", { 
-        pathLen: path.length, 
-        safetyBuffer, 
-        distToStart: distToStart.toFixed(1), 
+      console.log("[LOOP FAIL]", {
+        pathLen: path.length,
+        safetyBuffer,
+        distToStart: distToStart.toFixed(1),
         snapTol: SNAP_TOLERANCE,
-        reason: "Searchable path too short" 
+        reason: "Searchable path too short"
       });
     }
     return null;
@@ -115,27 +113,27 @@ export const detectClosedLoop = (
   for (let i = searchablePath.length - 2; i >= 0; i--) {
     const pA = searchablePath[i];
     const pB = searchablePath[i + 1];
-    
+
     let intersection = getIntersection(pLast, pCurrent, pA, pB);
-    
+
     if (!intersection) {
       const segDist = distanceSegmentToSegment(pLast, pCurrent, pA, pB);
       if (segDist < minSegDistFound) minSegDistFound = segDist;
-      
+
       // Tolerância de 3.5m para "quase cruzamentos"
       if (segDist <= 3.5) {
         intersection = { ...pA, timestamp: Date.now() };
       }
     }
-    
+
     if (intersection) {
       const rawLoop = [
-        intersection, 
-        ...path.slice(i + 1), 
-        pCurrent, 
+        intersection,
+        ...path.slice(i + 1),
+        pCurrent,
         intersection
       ];
-      
+
       const loopPath = cleanPolygon(rawLoop);
       const perimeter = calculatePathPerimeter(loopPath);
 
@@ -171,7 +169,7 @@ export const detectClosedLoop = (
       pCurrent,
       bestSnapPoint
     ];
-    
+
     const loopPath = cleanPolygon(rawLoop);
     const perimeter = calculatePathPerimeter(loopPath);
 
