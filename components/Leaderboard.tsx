@@ -19,8 +19,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ entries, currentUserId, onBac
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">Quartel General</h2>
-          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-1">Ranking Global de Domínio</p>
+          <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none text-white">HUB DE COMANDO</h2>
+          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Ranking de Supremacia Global</p>
         </div>
       </div>
 
@@ -28,16 +28,16 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ entries, currentUserId, onBac
         {sortedEntries.map((entry, index) => {
           const isMe = entry.id === currentUserId;
           return (
-            <div 
+            <div
               key={entry.id}
-              className={`relative overflow-hidden p-4 rounded-2xl border transition-all ${isMe ? 'bg-blue-600/20 border-blue-500' : 'bg-white/[0.03] border-white/5'}`}
+              className={`relative overflow-hidden p-4 rounded-2xl border transition-all ${isMe ? 'bg-emerald-600/20 border-emerald-500' : 'bg-white/[0.03] border-white/5'}`}
             >
               {index < 3 && (
                 <div className="absolute top-0 right-0 p-2 opacity-10">
-                   <Trophy size={40} className={index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : 'text-orange-600'} />
+                  <Trophy size={40} className={index === 0 ? 'text-yellow-500' : index === 1 ? 'text-gray-400' : 'text-orange-600'} />
                 </div>
               )}
-              
+
               <div className="flex items-center gap-4">
                 <div className="w-8 h-8 flex items-center justify-center font-black text-sm italic text-white/20">
                   #{index + 1}
@@ -46,10 +46,10 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ entries, currentUserId, onBac
                 <div className="w-12 h-12 rounded-xl bg-gray-900 border border-white/10 overflow-hidden flex items-center justify-center">
                   {entry.avatarUrl ? <img src={entry.avatarUrl} className="w-full h-full object-cover" /> : <UserIcon size={20} className="text-gray-600" />}
                 </div>
-                
+
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`font-black uppercase italic text-xs tracking-tight ${isMe ? 'text-blue-400' : 'text-white'}`}>
+                    <span className={`font-black uppercase italic text-xs tracking-tight ${isMe ? 'text-emerald-400' : 'text-white'}`}>
                       {entry.nickname} {isMe && '(VOCÊ)'}
                     </span>
                   </div>
@@ -64,10 +64,10 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ entries, currentUserId, onBac
                 </div>
 
                 <div className="text-right">
-                   <div className="text-[8px] font-black text-gray-500 uppercase">Domínio</div>
-                   <div className="text-sm font-black italic">
-                      {((entry.totalAreaM2 / 100000) * 100).toFixed(2)}%
-                   </div>
+                  <div className="text-[8px] font-black text-gray-500 uppercase">Domínio</div>
+                  <div className="text-sm font-black italic">
+                    {((entry.totalAreaM2 / 100000) * 100).toFixed(2)}%
+                  </div>
                 </div>
               </div>
             </div>

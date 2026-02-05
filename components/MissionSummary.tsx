@@ -50,17 +50,17 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, onFinis
   return (
     <div className="absolute inset-0 bg-black z-[3000] flex flex-col p-6 overflow-y-auto pb-8 animate-in fade-in duration-500">
       {/* Background Effect */}
-      <div className="fixed inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_top_right,#1e3a8a,transparent_70%)]"></div>
+      <div className="fixed inset-0 pointer-events-none opacity-20 bg-[radial-gradient(circle_at_top_right,#064e3b,transparent_70%)]"></div>
 
       {/* Header */}
       <div className="pt-8 mb-6 relative">
-        <div className="flex items-center gap-2 text-blue-500 mb-1">
+        <div className="flex items-center gap-2 text-emerald-500 mb-1">
           <ActivityIcon size={10} className="animate-pulse" />
           <span className="text-[8px] font-black uppercase tracking-[0.3em]">Operação Finalizada</span>
         </div>
         <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-[0.9] text-white">
           RESUMO<br />
-          <span className="text-blue-600">TÁTICO</span>
+          <span className="text-emerald-500">TÁTICO</span>
         </h2>
       </div>
 
@@ -76,7 +76,7 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, onFinis
       <div className="bg-white/5 border border-white/10 rounded-3xl p-5 mb-5 relative overflow-hidden backdrop-blur-md">
         <div className="flex justify-between items-end mb-4">
           <div>
-            <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-1">Sincronização Finalizada</p>
+            <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1">Sincronização Finalizada</p>
             <h3 className="text-3xl font-black italic text-white">+{animatedXp} XP</h3>
           </div>
           <div className="text-right">
@@ -86,7 +86,7 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, onFinis
 
         <div className="space-y-1.5">
           <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-1000" style={{ width: `${progressPct}%` }}></div>
+            <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-1000" style={{ width: `${progressPct}%` }}></div>
           </div>
           <div className="flex justify-between text-[8px] font-black text-white/30 uppercase tracking-widest">
             <span>{totalXpAfterMission.toLocaleString()} TOTAL</span>
@@ -96,8 +96,8 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, onFinis
       </div>
 
       {/* Status Info */}
-      <div className="bg-blue-600/5 border border-blue-500/10 rounded-2xl p-4 mb-6 flex items-center gap-3">
-        <Shield size={14} className="text-blue-500/50" />
+      <div className="bg-emerald-600/5 border border-emerald-500/10 rounded-2xl p-4 mb-6 flex items-center gap-3">
+        <Shield size={14} className="text-emerald-500/50" />
         <p className="text-[9px] font-bold text-white/40 italic leading-tight uppercase tracking-tight">
           Dados de território integrados à malha central com sucesso.
         </p>
@@ -105,7 +105,7 @@ const MissionSummary: React.FC<MissionSummaryProps> = ({ activity, user, onFinis
 
       <button
         onClick={onFinish}
-        className="mt-auto w-full bg-white text-black py-5 rounded-[2rem] font-black italic uppercase text-lg shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 border-b-4 border-gray-300"
+        className="mt-auto w-full bg-emerald-500 text-black py-5 rounded-[2rem] font-black italic uppercase text-lg shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 border-b-4 border-emerald-700"
       >
         CONCLUIR MISSÃO <ChevronRight size={20} />
       </button>
