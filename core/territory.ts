@@ -49,8 +49,8 @@ const isValidBoundingBox = (polygon: Point[]): boolean => {
   }
   const width = calculateDistance({ lat: minLat, lng: minLng }, { lat: minLat, lng: maxLng });
   const height = calculateDistance({ lat: minLat, lng: minLng }, { lat: maxLat, lng: minLng });
-  // Mínimo relaxado para 10m para permitir capturas menores
-  return width >= 10 && height >= 10;
+  // Mínimo relaxado para 1m para permitir qualquer captura visível
+  return width >= 1 && height >= 1;
 };
 
 const calculatePathPerimeter = (pts: Point[]): number => {
@@ -88,25 +88,14 @@ export const detectClosedLoop = (
     }
   }
 
-  // Safety buffer fixo e reduzido para permitir loops mais "apertados"
-  // Ignoramos apenas os últimos 5 pontos para evitar falsos positivos com o movimento imediato
-  const safetyBuffer = Math.min(5, Math.floor(path.length / 2));
+  // Safety buffer minimal para permitir capturas imediatas
+  // Ignoramos apenas os últimos 2 pontos para evitar self-intersection instantânea
+  const safetyBuffer = Math.min(2, Math.floor(path.length / 2));
 
   const searchablePath = path.slice(0, path.length - safetyBuffer);
 
   // Fallback para logs de debug se o rastro for mínimo
-  if (searchablePath.length < 3) {
-    if (path.length > 10) {
-      console.log("[LOOP FAIL]", {
-        pathLen: path.length,
-        safetyBuffer,
-        distToStart: distToStart.toFixed(1),
-        snapTol: SNAP_TOLERANCE,
-        reason: "Searchable path too short"
-      });
-    }
-    return null;
-  }
+  if (searchablePath.length < 2) return null;
 
   // 1. Prioridade: INTERSEÇÃO (Cruzamento real ou proximidade crítica)
   let minSegDistFound = Infinity;
@@ -120,17 +109,17 @@ export const detectClosedLoop = (
       const segDist = distanceSegmentToSegment(pLast, pCurrent, pA, pB);
       if (segDist < minSegDistFound) minSegDistFound = segDist;
 
-      // Tolerância de 3.5m para "quase cruzamentos"
-      if (segDist <= 3.5) {
-        intersection = { ...pA, timestamp: Date.now() };
+      // Tolerância de 5m para "quase cruzamentos" (mais permissivo)
+      if (segDist <= 5.0) {
+        intersection = { ...pB, timestamp: Date.now() };
       }
     }
 
     if (intersection) {
+      // Loop: Interseção -> Pontos do rastro -> Interseção
       const rawLoop = [
         intersection,
         ...path.slice(i + 1),
-        pCurrent,
         intersection
       ];
 

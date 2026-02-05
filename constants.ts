@@ -1,28 +1,28 @@
 
-export const GRID_SIZE = 0.00004; 
-export const CELL_AREA_M2 = 20; 
+export const GRID_SIZE = 0.00004;
+export const CELL_AREA_M2 = 20;
 export const ANTI_CHEAT_SPEED_LIMIT_KMH = 35;
 export const XP_PER_KM = 100;
-export const XP_PER_SECTOR = 5; 
+export const XP_PER_SECTOR = 5;
 export const XP_PER_SABOTAGE = 10;
 export const XP_PER_CITADEL = 50;
 export const LEVEL_XP_BASE = 1000;
 
 // Configurações Estáveis do Pipeline Geoflow™
-export const MIN_MOVE_DISTANCE = 5.0; 
-export const MAX_IDLE_TIME = 4000;     
-export const RDP_EPSILON = 0.000015;  
-export const SNAP_TOLERANCE = 25;      
+export const MIN_MOVE_DISTANCE = 5.0;
+export const MAX_IDLE_TIME = 4000;
+export const RDP_EPSILON = 0.000015;
+export const SNAP_TOLERANCE = 25;
 
-// Thresholds Anti-Falso Positivo
-export const MIN_ENCLOSED_CELLS = 30;       // ~600m2 (30 * 20m2)
-export const MIN_LOOP_PERIMETER_M = 60;     // Mínimo de 60m percorridos para um loop válido
-export const LOOP_SAFETY_BUFFER_PTS = 25;   // Ignora os últimos 25 pontos do rastro para evitar trigger em curvas
+// Thresholds Anti-Falso Positivo (Relaxados para máxima jogabilidade)
+export const MIN_ENCLOSED_CELLS = 1;         // Captura com qualquer área
+export const MIN_LOOP_PERIMETER_M = 5;      // Mínimo de 5m percorridos
+export const LOOP_SAFETY_BUFFER_PTS = 3;     // Ignora apenas os últimos 3 pontos
 
 export const COLORS = {
-  PRIMARY: '#3B82F6', 
-  ACCENT: '#10B981', 
-  DANGER: '#FF5A5F', 
+  PRIMARY: '#3B82F6',
+  ACCENT: '#10B981',
+  DANGER: '#FF5A5F',
   NEUTRAL: '#4B5563',
   GOLD: '#F59E0B'
 };
