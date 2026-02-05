@@ -165,8 +165,8 @@ const App: React.FC = () => {
         ...prev,
         capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]),
         fullPath: nextFull,
-        // Mantemos o rastro "limpo" a partir do ponto de fechamento
-        segmentStartIndex: nextFull.length - 1,
+        // PODA CIRÚRGICA: Mantemos o "caule" do rastro ativo para novas capturas
+        segmentStartIndex: absoluteIntersectionIndex,
         points: [loc]
       };
     });
