@@ -155,15 +155,15 @@ const App: React.FC = () => {
 
     setCurrentActivity(prev => {
       if (!prev) return null;
-      // Adiciona a localização atual ao rastro completo
+      // No INTVL, o rastro "ativo" (segmento) continua a partir do ponto de fechamento.
+      // Mantemos o fullPath para visualização, mas o segmentStartIndex garante que a lógica ignore o que já foi capturado.
       const nextFull = [...prev.fullPath, loc];
-      // Reinicia o índice do segmento para o final do rastro atual
       return {
         ...prev,
         capturedCellIds: new Set([...Array.from(prev.capturedCellIds), ...enclosedIds]),
         fullPath: nextFull,
         segmentStartIndex: nextFull.length - 1,
-        points: [loc] // Reset do rastro simplificado para o novo segmento
+        points: [loc] // Reset do rastro simplificado (RDP)
       };
     });
     setTimeout(() => handleSync(true), 100);

@@ -11,13 +11,13 @@ export const LEVEL_XP_BASE = 1000;
 // Configurações Estáveis do Pipeline Geoflow™
 export const MIN_MOVE_DISTANCE = 5.0;
 export const MAX_IDLE_TIME = 4000;
-export const RDP_EPSILON = 0.000015;
+export const RDP_EPSILON = 0.000010;
 export const SNAP_TOLERANCE = 25;
 
-// Thresholds Equilibrados (Inspirado em INTVL/Empire)
-export const MIN_ENCLOSED_CELLS = 4;        // ~80m2 
-export const MIN_LOOP_PERIMETER_M = 30;     // Mínimo de 30m para ser um território real
-export const LOOP_SAFETY_BUFFER_PTS = 12;   // Ignora os últimos 12 pontos para evitar curvas
+// Thresholds Equilibrados (Estilo INTVL)
+export const MIN_ENCLOSED_CELLS = 5;        // ~100m2 
+export const MIN_LOOP_PERIMETER_M = 40;     // Mínimo de 40m para evitar loops fantasmáticos
+export const LOOP_SAFETY_BUFFER_PTS = 15;   // Ignora os últimos passos para não fechar loop em si mesmo
 
 export const COLORS = {
   PRIMARY: '#3B82F6',
